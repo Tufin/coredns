@@ -43,19 +43,19 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 
-	segs := dns.SplitDomainName(state.Name())
-
-	if len(segs) <= 1 {
-		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
-	}
-
 	sourceService := whitelist.getServiceFromIP(sourceIPAddr)
 	if sourceService == nil {
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 
 	querySrcService := fmt.Sprintf("%s.%s", sourceService.Name, sourceService.Namespace)
+
 	queryDstLocation, origin, dstConf := "", "", ""
+	segs := dns.SplitDomainName(state.Name())
+
+	if len(segs) <= 1 {
+		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
+	}
 
 	if ns, _ := whitelist.Kubernetes.APIConn.GetNamespaceByName(segs[1]); ns != nil {
 		//local kubernetes dstConf
@@ -180,7 +180,7 @@ func (whitelist whitelist) log(service string, query, origin, action string) {
 
 	_, err := whitelist.Discovery.Discover(context.Background(), &Discovery{Msg: actionBytes.Bytes()})
 	if err != nil {
-		log.Errorf("Log not sent to discovery: %+v", err)
+		log.Errorf("Log not sent to discovery: %s %s %s %s %+v", service, query, origin, action, err)
 	}
 
 }
