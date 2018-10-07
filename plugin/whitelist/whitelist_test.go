@@ -2,14 +2,12 @@ package whitelist
 
 import (
 	"context"
-	"github.com/coredns/coredns/plugin/kubernetes"
-	"github.com/coredns/coredns/plugin/pkg/watch"
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/miekg/dns"
+	"github.com/stretchr/testify/assert"
 	api "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"testing"
-	"time"
 )
 
 type mockHandler struct {
@@ -27,110 +25,82 @@ func (mh mockHandler) Name() string {
 	return "mockHandler"
 }
 
-type APIConnServeTest struct{}
+type mockKubeAPI struct {
+}
 
-func (APIConnServeTest) HasSynced() bool                        { return true }
-func (APIConnServeTest) Run()                                   { return }
-func (APIConnServeTest) Stop() error                            { return nil }
-func (APIConnServeTest) EpIndexReverse(string) []*api.Endpoints { return nil }
-func (APIConnServeTest) SvcIndexReverse(string) []*api.Service  { return nil }
-func (APIConnServeTest) Modified() int64                        { return time.Now().Unix() }
-func (APIConnServeTest) SetWatchChan(watch.Chan)                {}
-func (APIConnServeTest) Watch(string) error                     { return nil }
-func (APIConnServeTest) StopWatching(string)                    {}
+func (mk mockKubeAPI) ServiceList() []*api.Service {
+	svcs := []*api.Service{
+		{
+			ObjectMeta: meta.ObjectMeta{
+				Name:      "svc1",
+				Namespace: "testns",
+				Labels:    map[string]string{"app": "test"},
+			},
+			Spec: api.ServiceSpec{
+				ClusterIP: "10.0.0.1",
+				Ports: []api.ServicePort{{
+					Name:     "http",
+					Protocol: "tcp",
+					Port:     80,
+				}},
+			},
+		},
+		{
+			ObjectMeta: meta.ObjectMeta{
+				Name:      "hdls1",
+				Namespace: "testns",
+				Labels:    map[string]string{"app": "test2"},
+			},
+			Spec: api.ServiceSpec{
+				ClusterIP: api.ClusterIPNone,
+			},
+		},
+		{
+			ObjectMeta: meta.ObjectMeta{
+				Name:      "external",
+				Namespace: "testns",
+			},
+			Spec: api.ServiceSpec{
+				ExternalName: "coredns.io",
+				Ports: []api.ServicePort{{
+					Name:     "http",
+					Protocol: "tcp",
+					Port:     80,
+				}},
+				Type: api.ServiceTypeExternalName,
+			},
+		},
+	}
+	return svcs
+}
 
-func (APIConnServeTest) PodIndex(string) []*api.Pod {
-	a := []*api.Pod{{
+func (mk mockKubeAPI) GetNamespaceByName(name string) (*api.Namespace, error) {
+	return &api.Namespace{
+		ObjectMeta: meta.ObjectMeta{
+			Name: name,
+		},
+	}, nil
+}
+
+func (mk mockKubeAPI) PodIndex(string) []*api.Pod {
+	return []*api.Pod{{
 		ObjectMeta: meta.ObjectMeta{
 			Namespace: "podns",
+			Labels:    map[string]string{"app": "test"},
 		},
 		Status: api.PodStatus{
 			PodIP: "10.240.0.1", // Remote IP set in test.ResponseWriter
 		},
 	}}
-	return a
 }
 
-var svcIndex = map[string][]*api.Service{
-	"svc1.testns": {{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      "svc1",
-			Namespace: "testns",
-		},
-		Spec: api.ServiceSpec{
-			Type:      api.ServiceTypeClusterIP,
-			ClusterIP: "10.0.0.1",
-			Ports: []api.ServicePort{{
-				Name:     "http",
-				Protocol: "tcp",
-				Port:     80,
-			}},
-		},
-	}},
-	"svcempty.testns": {{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      "svcempty",
-			Namespace: "testns",
-		},
-		Spec: api.ServiceSpec{
-			Type:      api.ServiceTypeClusterIP,
-			ClusterIP: "10.0.0.1",
-			Ports: []api.ServicePort{{
-				Name:     "http",
-				Protocol: "tcp",
-				Port:     80,
-			}},
-		},
-	}},
-	"svc6.testns": {{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      "svc6",
-			Namespace: "testns",
-		},
-		Spec: api.ServiceSpec{
-			Type:      api.ServiceTypeClusterIP,
-			ClusterIP: "1234:abcd::1",
-			Ports: []api.ServicePort{{
-				Name:     "http",
-				Protocol: "tcp",
-				Port:     80,
-			}},
-		},
-	}},
-	"hdls1.testns": {{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      "hdls1",
-			Namespace: "testns",
-		},
-		Spec: api.ServiceSpec{
-			Type:      api.ServiceTypeClusterIP,
-			ClusterIP: api.ClusterIPNone,
-		},
-	}},
-	"external.testns": {{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      "external",
-			Namespace: "testns",
-		},
-		Spec: api.ServiceSpec{
-			ExternalName: "ext.interwebs.test",
-			Ports: []api.ServicePort{{
-				Name:     "http",
-				Protocol: "tcp",
-				Port:     80,
-			}},
-			Type: api.ServiceTypeExternalName,
-		},
-	}},
-}
+func TestWhitelist_ServeDNS_NotWhitelisted(t *testing.T) {
 
-func TestWhitelist_ServeDNS(t *testing.T) {
-
-	k8s := kubernetes.New([]string{"cluster.local"})
-
-	whitelistPlugin := &whitelist{Kubernetes: k8s, Next: newMockHandler(),
+	next := newMockHandler()
+	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
 		Discovery:     nil,
-		Configuration: whitelistConfig{}}
+		Zones:         []string{"cluster.local"},
+		Configuration: whitelistConfig{blacklist: false}}
 
 	rw := &test.ResponseWriter{}
 	req := new(dns.Msg)
@@ -139,4 +109,28 @@ func TestWhitelist_ServeDNS(t *testing.T) {
 
 	whitelistPlugin.ServeDNS(context.Background(), rw, req)
 
+	assert.False(t, next.Served)
+
+}
+
+func TestWhitelist_ServeDNS_Whitelisted(t *testing.T) {
+
+	next := newMockHandler()
+
+	config := make(map[string][]string)
+	config["svc1.testns"] = []string{"www.google.com", "www.amazon.com"}
+
+	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
+		Discovery:     nil,
+		Zones:         []string{"cluster.local"},
+		Configuration: whitelistConfig{blacklist: true, SourceToDestination: convert(config)}}
+
+	rw := &test.ResponseWriter{}
+	req := new(dns.Msg)
+
+	req.SetQuestion("www.google.com", dns.TypeA)
+
+	whitelistPlugin.ServeDNS(context.Background(), rw, req)
+
+	assert.True(t, next.Served)
 }

@@ -7,23 +7,30 @@ import (
 	"errors"
 	"fmt"
 	"github.com/coredns/coredns/plugin"
-	"github.com/coredns/coredns/plugin/kubernetes"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/request"
 	"github.com/miekg/dns"
 	"k8s.io/api/core/v1"
+	api "k8s.io/api/core/v1"
 	"net"
 	"strings"
 )
 
 var log = clog.NewWithPlugin("whitelist")
 
+type kubeAPI interface {
+	ServiceList() []*api.Service
+	GetNamespaceByName(string) (*api.Namespace, error)
+	PodIndex(string) []*api.Pod
+}
+
 type whitelist struct {
-	Kubernetes    *kubernetes.Kubernetes
+	Kubernetes    kubeAPI
 	Next          plugin.Handler
 	Discovery     DiscoveryServiceClient
 	Fallthrough   []string
 	Configuration whitelistConfig
+	plugin.Zones
 }
 
 func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, r *dns.Msg) (int, error) {
@@ -38,10 +45,6 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 	var sourceIPAddr string
 	if ip, ok := remoteAddr.(*net.UDPAddr); ok {
 		sourceIPAddr = ip.IP.String()
-	}
-
-	if sourceIPAddr == "" {
-		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 
 	segs := dns.SplitDomainName(state.Name())
@@ -65,14 +68,14 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 	querySrcService := fmt.Sprintf("%s.%s", sourceService.Name, sourceService.Namespace)
 	queryDstLocation, origin, dstConf := "", "", ""
 
-	if ns, _ := whitelist.Kubernetes.APIConn.GetNamespaceByName(segs[1]); ns != nil {
+	if ns, _ := whitelist.Kubernetes.GetNamespaceByName(segs[1]); ns != nil {
 		//local kubernetes dstConf
 		queryDstLocation = fmt.Sprintf("%s.listentry.%s", segs[0], segs[1])
 		origin = ""
 		dstConf = fmt.Sprintf("%s.%s", segs[0], segs[1])
 	} else {
 		//make sure that this is real external query without .cluster.local in the end
-		zone := plugin.Zones(whitelist.Kubernetes.Zones).Matches(state.Name())
+		zone := plugin.Zones(whitelist.Zones).Matches(state.Name())
 		if zone != "" {
 			return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 		}
@@ -82,7 +85,7 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 		dstConf = strings.TrimRight(state.Name(), ".")
 	}
 
-	serviceName := fmt.Sprintf("%s.svc.%s", querySrcService, whitelist.Kubernetes.Zones[0])
+	serviceName := fmt.Sprintf("%s.svc.%s", querySrcService, whitelist.Zones[0])
 
 	if whitelist.Configuration.blacklist {
 		if whitelist.Discovery != nil {
@@ -112,12 +115,12 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 
 func (whitelist whitelist) getServiceFromIP(ipAddr string) *v1.Service {
 
-	services := whitelist.Kubernetes.APIConn.ServiceList()
+	services := whitelist.Kubernetes.ServiceList()
 	if services == nil || len(services) == 0 {
 		return nil
 	}
 
-	pods := whitelist.Kubernetes.APIConn.PodIndex(ipAddr)
+	pods := whitelist.Kubernetes.PodIndex(ipAddr)
 	if pods == nil || len(pods) == 0 {
 		return nil
 	}
@@ -158,7 +161,7 @@ func (whitelist whitelist) getIpByServiceName(serviceName string) string {
 		return ""
 	}
 
-	services := whitelist.Kubernetes.APIConn.ServiceList()
+	services := whitelist.Kubernetes.ServiceList()
 	if services == nil || len(services) == 0 {
 		return ""
 	}
