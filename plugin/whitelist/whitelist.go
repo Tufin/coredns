@@ -41,27 +41,27 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 	}
 
 	if sourceIPAddr == "" {
-		log.Debug("no source ip addr")
+		log.Info("no source ip addr")
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 
 	segs := dns.SplitDomainName(state.Name())
 
 	if len(segs) <= 1 {
-		log.Debug("can not parse segments for %s", state.Name())
+		log.Infof("can not parse segments for %s", state.Name())
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 
 	sourceService := whitelist.getServiceFromIP(sourceIPAddr)
 	if sourceService == nil {
-		log.Debugf("no service for ip %s", sourceIPAddr)
+		log.Infof("no service for ip %s", sourceIPAddr)
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 
 	query := strings.TrimRight(state.Name(), ".")
 	for _, domain := range whitelist.Fallthrough {
 		if strings.EqualFold(domain, query) {
-			log.Debugf("fallthrough", sourceIPAddr)
+			log.Infof("fallthrough", sourceIPAddr)
 			return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 		}
 	}
@@ -71,16 +71,16 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 
 	if ns, _ := whitelist.Kubernetes.APIConn.GetNamespaceByName(segs[1]); ns != nil {
 		//local kubernetes dstConf
-		log.Debugf("local query", state.Name())
+		log.Infof("local query", state.Name())
 		queryDstLocation = fmt.Sprintf("%s.listentry.%s", segs[0], segs[1])
 		origin = ""
 		dstConf = fmt.Sprintf("%s.%s", segs[0], segs[1])
 	} else {
 		//make sure that this is real external query without .cluster.local in the end
-		log.Debugf("external query", state.Name())
+		log.Infof("external query", state.Name())
 		zone := plugin.Zones(whitelist.Kubernetes.Zones).Matches(state.Name())
 		if zone != "" {
-			log.Debugf("zone not supported", zone)
+			log.Infof("zone not supported", zone)
 			return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 		}
 		//external query
