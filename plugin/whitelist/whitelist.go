@@ -139,7 +139,7 @@ func (whitelist whitelist) getServiceFromIP(ipAddr string) *v1.Service {
 	for _, svc := range services {
 		log.Infof("%+v", svc)
 		for pLabelKey, pLabelValue := range pod.Labels {
-			if svcLabelValue, ok := svc.Labels[pLabelKey]; ok {
+			if svcLabelValue, ok := svc.Spec.Selector[pLabelKey]; ok {
 				if strings.EqualFold(pLabelValue, svcLabelValue) {
 					service = svc
 				}
