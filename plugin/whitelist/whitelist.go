@@ -47,11 +47,13 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 	segs := dns.SplitDomainName(state.Name())
 
 	if len(segs) <= 1 {
+		log.Debug("can not parse segments for %s", state.Name())
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 
 	sourceService := whitelist.getServiceFromIP(sourceIPAddr)
 	if sourceService == nil {
+		log.Debugf("no service for ip %s", sourceIPAddr)
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 
