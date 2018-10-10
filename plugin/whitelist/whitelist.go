@@ -121,18 +121,23 @@ func (whitelist whitelist) getServiceFromIP(ipAddr string) *v1.Service {
 
 	services := whitelist.Kubernetes.APIConn.ServiceList()
 	if services == nil || len(services) == 0 {
+		log.Info("no services")
 		return nil
+
 	}
 
 	pods := whitelist.Kubernetes.APIConn.PodIndex(ipAddr)
 	if pods == nil || len(pods) == 0 {
+		log.Info("no pods")
 		return nil
 	}
 
+	log.Infof("pods len %d", len(pods))
 	pod := pods[0]
 
 	var service *v1.Service
 	for _, svc := range services {
+		log.Infof("%+v", svc)
 		for pLabelKey, pLabelValue := range pod.Labels {
 			if svcLabelValue, ok := svc.Labels[pLabelKey]; ok {
 				if strings.EqualFold(pLabelValue, svcLabelValue) {
