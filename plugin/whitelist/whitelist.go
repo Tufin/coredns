@@ -147,6 +147,7 @@ func (whitelist whitelist) getServiceFromIP(ipAddr string) *v1.Service {
 			}
 		}
 	}
+	log.Infof("chosen %+v", service)
 	return service
 }
 
