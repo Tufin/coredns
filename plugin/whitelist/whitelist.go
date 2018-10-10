@@ -142,6 +142,7 @@ func (whitelist whitelist) getServiceFromIP(ipAddr string) *v1.Service {
 			if svcLabelValue, ok := svc.Spec.Selector[pLabelKey]; ok {
 				if strings.EqualFold(pLabelValue, svcLabelValue) {
 					service = svc
+					break
 				}
 			}
 		}
