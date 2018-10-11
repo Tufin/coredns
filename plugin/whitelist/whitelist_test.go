@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"testing"
+
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	api "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"testing"
 )
 
 type mockHandler struct {
@@ -134,7 +135,6 @@ func TestWhitelist_ServeDNS_NotWhitelisted(t *testing.T) {
 	whitelistPlugin.ServeDNS(context.Background(), rw, req)
 
 	assert.False(t, next.Served)
-
 }
 
 func TestWhitelist_ServeDNS_ConfiguredNotWhitelisted(t *testing.T) {

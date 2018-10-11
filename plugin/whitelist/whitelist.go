@@ -6,14 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"strings"
+
 	"github.com/coredns/coredns/plugin"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/request"
 	"github.com/miekg/dns"
 	"k8s.io/api/core/v1"
 	api "k8s.io/api/core/v1"
-	"net"
-	"strings"
 )
 
 var log = clog.NewWithPlugin("whitelist")
@@ -43,13 +44,21 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 	state := request.Request{W: rw, Req: r, Context: ctx}
 
 	var sourceIPAddr string
-	if ip, ok := remoteAddr.(*net.UDPAddr); ok {
+	if ip, ok := remoteAddr.(*net.UDPAddr); !ok {
+		clog.Debug("failed to cast source IP")
+		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
+	} else {
 		sourceIPAddr = ip.IP.String()
+		if sourceIPAddr == "" {
+			clog.Debugf("empty source IP: '%v'", ip)
+			return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
+		}
 	}
+	clog.Debugf("source IP: '%s'", sourceIPAddr)
 
 	segs := dns.SplitDomainName(state.Name())
-
 	if len(segs) <= 1 {
+		clog.Debugf("number of segments: '%d' for state name: '%s'", state.Name())
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 
@@ -122,21 +131,21 @@ func (whitelist whitelist) getServiceFromIP(ipAddr string) *v1.Service {
 
 	pods := whitelist.Kubernetes.PodIndex(ipAddr)
 	if pods == nil || len(pods) == 0 {
+		log.Debugf("failed to get pod from IP: '%s'", ipAddr)
 		return nil
 	}
 
-	pod := pods[0]
-
 	var service *v1.Service
-	for _, svc := range services {
-		for pLabelKey, pLabelValue := range pod.Labels {
-			if svcLabelValue, ok := svc.Spec.Selector[pLabelKey]; ok {
-				if strings.EqualFold(pLabelValue, svcLabelValue) {
-					service = svc
+	for _, currService := range services {
+		for podLabelKey, podLabelValue := range pods[0].Labels {
+			if svcLabelValue, ok := currService.Spec.Selector[podLabelKey]; ok {
+				if strings.EqualFold(podLabelValue, svcLabelValue) {
+					service = currService
 				}
 			}
 		}
 	}
+
 	return service
 }
 
