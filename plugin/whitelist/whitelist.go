@@ -45,20 +45,20 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 
 	var sourceIPAddr string
 	if ip, ok := remoteAddr.(*net.UDPAddr); !ok {
-		clog.Debug("failed to cast source IP")
+		log.Debug("failed to cast source IP")
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	} else {
 		sourceIPAddr = ip.IP.String()
 		if sourceIPAddr == "" {
-			clog.Debugf("empty source IP: '%v'", ip)
+			log.Debugf("empty source IP: '%v'", ip)
 			return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 		}
 	}
-	clog.Debugf("source IP: '%s'", sourceIPAddr)
+	log.Debugf("source IP: '%s'", sourceIPAddr)
 
 	segs := dns.SplitDomainName(state.Name())
 	if len(segs) <= 1 {
-		clog.Debugf("number of segments: '%d' for state name: '%s'", state.Name())
+		log.Debugf("number of segments: '%d' for state name: '%s'", state.Name())
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 
