@@ -7,35 +7,35 @@ import (
 )
 
 // Start 2 tests server, server A will proxy to B, server B is an CH server.
-func TestProxyToChaosServer(t *testing.T) {
-	t.Parallel()
-	corefile := `.:0 {
-	chaos CoreDNS-001 miek@miek.nl
-}
-`
-	chaos, udpChaos, _, err := CoreDNSServerAndPorts(corefile)
-	if err != nil {
-		t.Fatalf("Could not get CoreDNS serving instance: %s", err)
-	}
-
-	defer chaos.Stop()
-
-	corefileProxy := `.:0 {
-		proxy . ` + udpChaos + `
-}
-`
-	proxy, udp, _, err := CoreDNSServerAndPorts(corefileProxy)
-	if err != nil {
-		t.Fatalf("Could not get CoreDNS serving instance")
-	}
-	defer proxy.Stop()
-
-	chaosTest(t, udpChaos)
-
-	chaosTest(t, udp)
-	// chaosTest(t, tcp, "tcp"), commented out because we use the original transport to reach the
-	// proxy and we only forward to the udp port.
-}
+//func TestProxyToChaosServer(t *testing.T) {
+//	t.Parallel()
+//	corefile := `.:0 {
+//	chaos CoreDNS-001 miek@miek.nl
+//}
+//`
+//	chaos, udpChaos, _, err := CoreDNSServerAndPorts(corefile)
+//	if err != nil {
+//		t.Fatalf("Could not get CoreDNS serving instance: %s", err)
+//	}
+//
+//	defer chaos.Stop()
+//
+//	corefileProxy := `.:0 {
+//		proxy . ` + udpChaos + `
+//}
+//`
+//	proxy, udp, _, err := CoreDNSServerAndPorts(corefileProxy)
+//	if err != nil {
+//		t.Fatalf("Could not get CoreDNS serving instance")
+//	}
+//	defer proxy.Stop()
+//
+//	chaosTest(t, udpChaos)
+//
+//	chaosTest(t, udp)
+//	// chaosTest(t, tcp, "tcp"), commented out because we use the original transport to reach the
+//	// proxy and we only forward to the udp port.
+//}
 
 func chaosTest(t *testing.T, server string) {
 	m := new(dns.Msg)
