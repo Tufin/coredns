@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"testing"
 
+	"time"
+
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
@@ -224,7 +226,15 @@ func TestWhitelist_Log(t *testing.T) {
 
 	whitelistPlugin.ServeDNS(context.Background(), rw, req)
 	assert.True(t, next.Served)
-	<-mockDiscovery.logged
+
+	select {
+
+	case <-time.After(10 * time.Second):
+		assert.Fail(t, "didn't log after timeout timeout")
+	case <-mockDiscovery.logged:
+
+	}
+
 	assert.Len(t, mockDiscovery.discovered, 1)
 
 	msg := mockDiscovery.discovered[0]

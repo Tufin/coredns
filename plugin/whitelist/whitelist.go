@@ -131,20 +131,22 @@ func (whitelist whitelist) getServiceFromIP(ipAddr string) *v1.Service {
 		return nil
 	}
 
-	podCh := make(chan *api.Pod)
 	var pod *api.Pod
 	select {
 
 	case <-time.After(10 * time.Millisecond):
 		return nil
 
-	case pod = <-podCh:
+	default:
 		var indexPods []*api.Pod
-		for i := 0; indexPods == nil || len(indexPods) == 0; i++ {
+		for {
 			indexPods = whitelist.Kubernetes.PodIndex(ipAddr)
+			if len(indexPods) > 0 {
+				pod = indexPods[0]
+				break
+			}
 			time.Sleep(1 * time.Microsecond)
 		}
-		podCh <- indexPods[0]
 	}
 
 	var service *v1.Service
