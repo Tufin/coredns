@@ -92,6 +92,10 @@ func (p Proxy) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (
 
 			reply, backendErr = upstream.Exchanger().Exchange(ctx, host.Name, state)
 
+			for _, ans := range reply.Answer {
+				ans.Header().Ttl = 1
+			}
+
 			atomic.AddInt64(&host.Conns, -1)
 
 			if child != nil {
