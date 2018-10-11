@@ -31,6 +31,7 @@ const (
 
 type dnsController interface {
 	ServiceList() []*api.Service
+	PodList() []*api.Pod
 	SvcIndex(string) []*api.Service
 	SvcIndexReverse(string) []*api.Service
 	PodIndex(string) []*api.Pod
@@ -375,6 +376,18 @@ func (dns *dnsControl) ServiceList() (svcs []*api.Service) {
 	os := dns.svcLister.List()
 	for _, o := range os {
 		s, ok := o.(*api.Service)
+		if !ok {
+			continue
+		}
+		svcs = append(svcs, s)
+	}
+	return svcs
+}
+
+func (dns *dnsControl) PodList() (svcs []*api.Pod) {
+	os := dns.podLister.List()
+	for _, o := range os {
+		s, ok := o.(*api.Pod)
 		if !ok {
 			continue
 		}

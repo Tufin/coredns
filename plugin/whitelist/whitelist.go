@@ -21,6 +21,7 @@ var log = clog.NewWithPlugin("whitelist")
 
 type kubeAPI interface {
 	ServiceList() []*api.Service
+	PodList() []*api.Pod
 	GetNamespaceByName(string) (*api.Namespace, error)
 	PodIndex(string) []*api.Pod
 }
@@ -130,8 +131,10 @@ func (whitelist whitelist) getServiceFromIP(ipAddr string) *v1.Service {
 	}
 
 	pods := whitelist.Kubernetes.PodIndex(ipAddr)
+
 	if pods == nil || len(pods) == 0 {
 		log.Debugf("failed to get pod from IP: '%s'", ipAddr)
+		log.Debugf("pods %+v", whitelist.Kubernetes.PodList())
 		return nil
 	}
 
