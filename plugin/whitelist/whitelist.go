@@ -9,6 +9,9 @@ import (
 	"net"
 	"strings"
 
+	"sync"
+	"time"
+
 	"github.com/coredns/coredns/plugin"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/request"
@@ -129,15 +132,25 @@ func (whitelist whitelist) getServiceFromIP(ipAddr string) *v1.Service {
 		return nil
 	}
 
-	pods := whitelist.Kubernetes.PodIndex(ipAddr)
-	if pods == nil || len(pods) == 0 {
-		log.Debugf("failed to get pod from IP: '%s'", ipAddr)
+	podCh := make(chan *api.Pod)
+	var pod *api.Pod
+	select {
+
+	case time.After(10 * time.Millisecond):
 		return nil
+
+	case pod = <-podCh:
+		var indexPods []*api.Pod
+		for i := 0; indexPods == nil || len(indexPods) == 0; i++ {
+			indexPods = whitelist.Kubernetes.PodIndex(ipAddr)
+			time.Sleep(1 * time.Microsecond)
+		}
+		podCh <- indexPods[0]
 	}
 
 	var service *v1.Service
 	for _, currService := range services {
-		for podLabelKey, podLabelValue := range pods[0].Labels {
+		for podLabelKey, podLabelValue := range pod.Labels {
 			if svcLabelValue, ok := currService.Spec.Selector[podLabelKey]; ok {
 				if strings.EqualFold(podLabelValue, svcLabelValue) {
 					service = currService
@@ -147,6 +160,21 @@ func (whitelist whitelist) getServiceFromIP(ipAddr string) *v1.Service {
 	}
 
 	return service
+}
+
+func WaitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
+
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+	select {
+	case <-c:
+		return true // completed normally
+	case <-time.After(timeout):
+		return false // timed out
+	}
 }
 
 func (whitelist whitelist) getIpByServiceName(serviceName string) string {
