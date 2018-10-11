@@ -112,6 +112,9 @@ func (APIConnServiceTest) SvcIndex(string) []*api.Service {
 	}
 	return svcs
 }
+func (APIConnServiceTest) PodList() []*api.Pod {
+	return []*api.Pod{}
+}
 
 func (APIConnServiceTest) ServiceList() []*api.Service {
 	svcs := []*api.Service{

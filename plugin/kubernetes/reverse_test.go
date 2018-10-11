@@ -27,6 +27,10 @@ func (APIConnReverseTest) SetWatchChan(watch.Chan)         {}
 func (APIConnReverseTest) Watch(string) error              { return nil }
 func (APIConnReverseTest) StopWatching(string)             {}
 
+func (APIConnReverseTest) PodList() []*api.Pod {
+	return []*api.Pod{}
+}
+
 func (APIConnReverseTest) SvcIndex(svc string) []*api.Service {
 	if svc != "svc1.testns" {
 		return nil
