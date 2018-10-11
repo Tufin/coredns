@@ -9,6 +9,8 @@ import (
 	"net"
 	"strings"
 
+	"time"
+
 	"github.com/coredns/coredns/plugin"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/request"
@@ -129,15 +131,27 @@ func (whitelist whitelist) getServiceFromIP(ipAddr string) *v1.Service {
 		return nil
 	}
 
-	pods := whitelist.Kubernetes.PodIndex(ipAddr)
-	if pods == nil || len(pods) == 0 {
-		log.Debugf("failed to get pod from IP: '%s'", ipAddr)
+	var pod *api.Pod
+	select {
+
+	case <-time.After(10 * time.Millisecond):
 		return nil
+
+	default:
+		var indexPods []*api.Pod
+		for {
+			indexPods = whitelist.Kubernetes.PodIndex(ipAddr)
+			if len(indexPods) > 0 {
+				pod = indexPods[0]
+				break
+			}
+			time.Sleep(1 * time.Microsecond)
+		}
 	}
 
 	var service *v1.Service
 	for _, currService := range services {
-		for podLabelKey, podLabelValue := range pods[0].Labels {
+		for podLabelKey, podLabelValue := range pod.Labels {
 			if svcLabelValue, ok := currService.Spec.Selector[podLabelKey]; ok {
 				if strings.EqualFold(podLabelValue, svcLabelValue) {
 					service = currService
