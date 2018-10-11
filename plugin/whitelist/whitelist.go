@@ -135,7 +135,7 @@ func (whitelist whitelist) getServiceFromIP(ipAddr string) *v1.Service {
 	var pod *api.Pod
 	select {
 
-	case time.After(10 * time.Millisecond):
+	case <-time.After(10 * time.Millisecond):
 		return nil
 
 	case pod = <-podCh:
