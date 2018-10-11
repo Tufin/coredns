@@ -15,6 +15,7 @@ import (
 	"github.com/miekg/dns"
 	"k8s.io/api/core/v1"
 	api "k8s.io/api/core/v1"
+	"time"
 )
 
 var log = clog.NewWithPlugin("whitelist")
@@ -130,13 +131,18 @@ func (whitelist whitelist) getServiceFromIP(ipAddr string) *v1.Service {
 		return nil
 	}
 
-	pods := whitelist.Kubernetes.PodIndex(ipAddr)
-
-	if pods == nil || len(pods) == 0 {
-		log.Debugf("failed to get pod from IP: '%s'", ipAddr)
-		log.Debugf("pods %+v", whitelist.Kubernetes.PodList())
-		return nil
+	var pods []*api.Pod
+	i := 0
+	for i = 0; pods == nil || len(pods) == 0; i++ {
+		pods = whitelist.Kubernetes.PodIndex(ipAddr)
+		time.Sleep(1 * time.Microsecond)
 	}
+
+	//if pods == nil || len(pods) == 0 {
+	log.Debugf("loop: %d", i)
+	//	log.Debugf("pods %+v", whitelist.Kubernetes.PodList())
+	//	return nil
+	//}
 
 	var service *v1.Service
 	for _, currService := range services {
