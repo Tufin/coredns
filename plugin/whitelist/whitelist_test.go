@@ -49,6 +49,10 @@ func (mc mockDiscovery) Configure(ctx context.Context, in *ConfigurationRequest,
 type mockKubeAPI struct {
 }
 
+func (mockKubeAPI) PodList() []*api.Pod {
+	return []*api.Pod{}
+}
+
 func (mk mockKubeAPI) ServiceList() []*api.Service {
 	svcs := []*api.Service{
 		{

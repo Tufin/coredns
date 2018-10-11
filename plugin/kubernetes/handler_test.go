@@ -434,6 +434,10 @@ func (APIConnServeTest) ServiceList() []*api.Service {
 	return svcs
 }
 
+func (APIConnServeTest) PodList() []*api.Pod {
+	return []*api.Pod{}
+}
+
 var epsIndex = map[string][]*api.Endpoints{
 	"svc1.testns": {{
 		Subsets: []api.EndpointSubset{

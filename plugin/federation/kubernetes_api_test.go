@@ -74,6 +74,9 @@ func (APIConnFederationTest) SvcIndex(string) []*api.Service {
 	}
 	return svcs
 }
+func (APIConnFederationTest) PodList() []*api.Pod {
+	return []*api.Pod{}
+}
 
 func (APIConnFederationTest) ServiceList() []*api.Service {
 	svcs := []*api.Service{

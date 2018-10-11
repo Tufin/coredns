@@ -39,6 +39,10 @@ func (APIConnTest) ServiceList() []*api.Service {
 	return svcs
 }
 
+func (APIConnTest) PodList() []*api.Pod {
+	return []*api.Pod{}
+}
+
 func (APIConnTest) EpIndexReverse(string) []*api.Endpoints {
 	eps := []*api.Endpoints{
 		{
