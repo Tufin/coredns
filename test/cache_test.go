@@ -53,7 +53,7 @@ func TestLookupCache(t *testing.T) {
 	}
 
 	ttl := resp.Answer[0].Header().Ttl
-	if ttl != 10 { // as set in the Corefile
+	if ttl != 1 { // as set in the Corefile
 		t.Errorf("Expected TTL to be %d, got %d", 10, ttl)
 	}
 }
