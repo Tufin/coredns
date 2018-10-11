@@ -54,10 +54,10 @@ func (mk mockKubeAPI) ServiceList() []*api.Service {
 			ObjectMeta: meta.ObjectMeta{
 				Name:      "svc1",
 				Namespace: "testns",
-				Labels:    map[string]string{"app": "test"},
 			},
 			Spec: api.ServiceSpec{
 				ClusterIP: "10.0.0.1",
+				Selector:  map[string]string{"app": "test"},
 				Ports: []api.ServicePort{{
 					Name:     "http",
 					Protocol: "tcp",
@@ -69,10 +69,10 @@ func (mk mockKubeAPI) ServiceList() []*api.Service {
 			ObjectMeta: meta.ObjectMeta{
 				Name:      "hdls1",
 				Namespace: "testns",
-				Labels:    map[string]string{"app": "test2"},
 			},
 			Spec: api.ServiceSpec{
 				ClusterIP: api.ClusterIPNone,
+				Selector:  map[string]string{"app": "test2"},
 			},
 		},
 		{
