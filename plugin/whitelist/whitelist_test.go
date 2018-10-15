@@ -127,7 +127,9 @@ func TestWhitelist_ServeDNS_NotWhitelisted(t *testing.T) {
 	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
 		Discovery:     nil,
 		Zones:         []string{"cluster.local"},
-		Configuration: whitelistConfig{blacklist: false}}
+		Configuration: whitelistConfig{blacklist: false},
+		Fallthrough:   NewList(),
+	}
 
 	rw := &test.ResponseWriter{}
 	req := new(dns.Msg)
@@ -146,10 +148,14 @@ func TestWhitelist_ServeDNS_ConfiguredNotWhitelisted(t *testing.T) {
 	config := make(map[string][]string)
 	config["svc1.testns"] = []string{"www.google.com", "www.amazon.com"}
 
-	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
+	whitelistPlugin := whitelist{
+		Kubernetes:    &mockKubeAPI{},
+		Next:          next,
 		Discovery:     nil,
 		Zones:         []string{"cluster.local"},
-		Configuration: whitelistConfig{blacklist: false, SourceToDestination: convert(config)}}
+		Configuration: whitelistConfig{blacklist: false, SourceToDestination: convert(config)},
+		Fallthrough:   NewList(),
+	}
 
 	rw := &test.ResponseWriter{}
 	req := new(dns.Msg)
@@ -168,10 +174,14 @@ func TestWhitelist_ServeDNS_Whitelisted(t *testing.T) {
 	config := make(map[string][]string)
 	config["svc1.testns"] = []string{"www.google.com", "www.amazon.com"}
 
-	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
+	whitelistPlugin := whitelist{
+		Kubernetes:    &mockKubeAPI{},
+		Next:          next,
 		Discovery:     nil,
 		Zones:         []string{"cluster.local"},
-		Configuration: whitelistConfig{blacklist: true, SourceToDestination: convert(config)}}
+		Configuration: whitelistConfig{blacklist: true, SourceToDestination: convert(config)},
+		Fallthrough:   NewList(),
+	}
 
 	rw := &test.ResponseWriter{}
 	req := new(dns.Msg)
@@ -190,10 +200,14 @@ func TestWhitelist_ServeDNS_Blacklist_UnknownSvc(t *testing.T) {
 	config := make(map[string][]string)
 	config["unknown.ns"] = []string{"www.google.com", "www.amazon.com"}
 
-	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
+	whitelistPlugin := whitelist{
+		Kubernetes:    &mockKubeAPI{},
+		Next:          next,
 		Discovery:     nil,
 		Zones:         []string{"cluster.local"},
-		Configuration: whitelistConfig{blacklist: true, SourceToDestination: convert(config)}}
+		Configuration: whitelistConfig{blacklist: true, SourceToDestination: convert(config)},
+		Fallthrough:   NewList(),
+	}
 
 	rw := &test.ResponseWriter{}
 	req := new(dns.Msg)
@@ -214,10 +228,14 @@ func TestWhitelist_Log(t *testing.T) {
 	config["svc1.testns"] = []string{"www.google.com", "www.amazon.com"}
 
 	mockDiscovery := &mockDiscovery{logged: make(chan bool)}
-	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
+	whitelistPlugin := whitelist{
+		Kubernetes:    &mockKubeAPI{},
+		Next:          next,
 		Discovery:     mockDiscovery,
 		Zones:         []string{clusterZone},
-		Configuration: whitelistConfig{blacklist: true, SourceToDestination: convert(config)}}
+		Configuration: whitelistConfig{blacklist: true, SourceToDestination: convert(config)},
+		Fallthrough:   NewList(),
+	}
 
 	rw := &test.ResponseWriter{}
 	req := new(dns.Msg)
@@ -253,4 +271,34 @@ func TestWhitelist_Log(t *testing.T) {
 	assert.Equal(t, "www.google.com", sentMsg.Destination)
 	assert.Equal(t, "allow", sentMsg.Action)
 	assert.Equal(t, "dns", sentMsg.Origin)
+}
+
+func TestWhitelist_ServeDNS_Fallthrough(t *testing.T) {
+
+	const domain = "guru.tufin.io"
+
+	next := newMockHandler()
+
+	config := make(map[string][]string)
+	config["svc1.testns"] = []string{"www.google.com", "www.amazon.com"}
+
+	whitelistPlugin := whitelist{
+		Kubernetes: &mockKubeAPI{},
+		Next:       next,
+		Discovery:  nil,
+		Zones:      []string{"cluster.local"},
+		Configuration: whitelistConfig{blacklist: true,
+			SourceToDestination: convert(config),
+		},
+		Fallthrough: NewList().Add(domain),
+	}
+
+	rw := &test.ResponseWriter{}
+	req := new(dns.Msg)
+
+	req.SetQuestion(domain, dns.TypeA)
+
+	whitelistPlugin.ServeDNS(context.Background(), rw, req)
+
+	assert.True(t, next.Served)
 }
