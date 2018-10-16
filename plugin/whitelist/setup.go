@@ -58,7 +58,9 @@ func kubernetesParse(c *caddy.Controller) (*kubernetes.Kubernetes, error) {
 
 func setup(c *caddy.Controller) error {
 
-	whitelist := &whitelist{}
+	whitelist := &whitelist{
+		Configuration: whitelistConfig{blacklist: true},
+	}
 
 	k8s, err := kubernetesParse(c)
 	if err != nil {
@@ -134,8 +136,8 @@ func (whitelist *whitelist) config() {
 
 	for {
 		configuration, err := whitelist.Discovery.Configure(context.Background(), &ConfigurationRequest{})
-
 		if err != nil {
+			log.Errorf("failed to stream whitelist discovery configure with '%v' retrying...", err)
 			continue
 		}
 
@@ -155,7 +157,7 @@ func (whitelist *whitelist) config() {
 			}
 
 			whitelist.Configuration = whitelistConfig{blacklist: dnsConfiguration.Blacklist, SourceToDestination: convert(dnsConfiguration.ServicesToWhitelist)}
-			log.Infof("dns configuration %+v", whitelist.Configuration)
+			log.Infof("dns configuration '%+v'", whitelist.Configuration)
 		}
 	}
 }
