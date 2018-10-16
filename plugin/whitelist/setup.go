@@ -29,6 +29,7 @@ type whitelistConfig struct {
 }
 
 func init() {
+
 	caddy.RegisterPlugin("whitelist", caddy.Plugin{
 		ServerType: "dns",
 		Action:     setup,
@@ -36,6 +37,7 @@ func init() {
 }
 
 func kubernetesParse(c *caddy.Controller) (*kubernetes.Kubernetes, error) {
+
 	var (
 		k8s *kubernetes.Kubernetes
 		err error
@@ -53,6 +55,7 @@ func kubernetesParse(c *caddy.Controller) (*kubernetes.Kubernetes, error) {
 			return k8s, err
 		}
 	}
+
 	return k8s, nil
 }
 
@@ -129,7 +132,6 @@ func newDiscoveryClient(discoveryURL string) (DiscoveryServiceClient, *grpc.Clie
 	}
 
 	return NewDiscoveryServiceClient(cc), cc
-
 }
 
 func (whitelist *whitelist) config() {
@@ -157,7 +159,7 @@ func (whitelist *whitelist) config() {
 			}
 
 			whitelist.Configuration = whitelistConfig{blacklist: dnsConfiguration.Blacklist, SourceToDestination: convert(dnsConfiguration.ServicesToWhitelist)}
-			log.Infof("dns configuration '%+v'", whitelist.Configuration)
+			log.Infof("DNS Configuration: '%+v'", whitelist.Configuration)
 		}
 	}
 }
