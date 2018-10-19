@@ -84,9 +84,11 @@ func setup(c *caddy.Controller) error {
 	whitelist.Zones = k8s.Zones
 	whitelist.InitDiscoveryServer(c)
 
-	if fall := os.Getenv("TUFIN_FALLTHROUGH_DOMAINS"); fall != "" {
-		fallthroughDomains := strings.Split(fall, ",")
-		whitelist.Fallthrough = fallthroughDomains
+	if sources := os.Getenv("TUFIN_FALLTHROUGH_SOURCES"); sources != "" {
+		whitelist.FallthroughSources = strings.Split(sources, ",")
+	}
+	if domains := os.Getenv("TUFIN_FALLTHROUGH_DOMAINS"); domains != "" {
+		whitelist.FallthroughDomains = strings.Split(domains, ",")
 	}
 
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {

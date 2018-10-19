@@ -28,11 +28,12 @@ type kubeAPI interface {
 }
 
 type whitelist struct {
-	Kubernetes    kubeAPI
-	Next          plugin.Handler
-	Discovery     DiscoveryServiceClient
-	Fallthrough   []string
-	Configuration whitelistConfig
+	Kubernetes         kubeAPI
+	Next               plugin.Handler
+	Discovery          DiscoveryServiceClient
+	FallthroughSources []string
+	FallthroughDomains []string
+	Configuration      whitelistConfig
 	plugin.Zones
 }
 
@@ -42,9 +43,9 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 	m.SetReply(r)
 	m.Authoritative, m.RecursionAvailable = true, true
 	remoteAddr := rw.RemoteAddr()
-
 	state := request.Request{W: rw, Req: r, Context: ctx}
 
+	// resolve IP
 	var sourceIPAddr string
 	if ip, ok := remoteAddr.(*net.UDPAddr); !ok {
 		log.Debug("failed to cast source IP")
@@ -56,7 +57,15 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 			return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 		}
 	}
-	log.Debugf("source IP: '%s'", sourceIPAddr)
+	log.Debugf("source IP: '%s', request: '%s'", sourceIPAddr, state.Name())
+
+	// fallthrough sources
+	for _, currSource := range whitelist.FallthroughSources {
+		if strings.EqualFold(currSource, sourceIPAddr) {
+			log.Debugf("fallthrough source IP: '%s' (request: '%s')", sourceIPAddr, state.Name())
+			return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
+		}
+	}
 
 	segs := dns.SplitDomainName(state.Name())
 	if len(segs) <= 1 {
@@ -64,14 +73,19 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 
+	// convert source IP to service
 	sourceService := whitelist.getServiceFromIP(sourceIPAddr)
 	if sourceService == nil {
+		log.Debugf("failed to convert source IP: '%s' to service (request: '%s')", sourceIPAddr, state.Name())
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
+	log.Debugf("source IP: '%s', source service: '%s', request: '%s'", sourceIPAddr, sourceService, state.Name())
 
+	// fallthrough request
 	query := strings.TrimRight(state.Name(), ".")
-	for _, domain := range whitelist.Fallthrough {
+	for _, domain := range whitelist.FallthroughDomains {
 		if strings.EqualFold(domain, query) {
+			log.Debugf("fallthrough request: '%s' (source IP: '%s')", query, sourceIPAddr)
 			return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 		}
 	}
@@ -98,6 +112,7 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 
 	serviceName := fmt.Sprintf("%s.svc.%s", querySrcService, whitelist.Zones[0])
 
+	// update kite
 	if whitelist.Configuration.blacklist {
 		if whitelist.Discovery != nil {
 			go whitelist.log(serviceName, queryDstLocation, origin, "allow")
@@ -121,32 +136,29 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 	m.SetRcode(r, dns.RcodeNameError)
 	rw.WriteMsg(m)
 	return dns.RcodeNameError, errors.New("not whitelisted")
-
 }
 
 func (whitelist whitelist) getServiceFromIP(ipAddr string) *v1.Service {
 
 	services := whitelist.Kubernetes.ServiceList()
 	if services == nil || len(services) == 0 {
+		log.Debug("No services found")
 		return nil
 	}
 
 	var pod *api.Pod
-	select {
-
-	case <-time.After(10 * time.Millisecond):
-		return nil
-
-	default:
-		var indexPods []*api.Pod
-		for {
-			indexPods = whitelist.Kubernetes.PodIndex(ipAddr)
-			if len(indexPods) > 0 {
-				pod = indexPods[0]
-				break
-			}
-			time.Sleep(1 * time.Microsecond)
+	i := 0
+	for ; i < 3; i++ {
+		indexPods := whitelist.Kubernetes.PodIndex(ipAddr)
+		if len(indexPods) > 0 {
+			pod = indexPods[0]
+			break
 		}
+		time.Sleep(3 * time.Microsecond)
+	}
+	if i == 3 {
+		log.Debugf("failed to translate IP: '%s' into pod", ipAddr)
+		return nil
 	}
 
 	var service *v1.Service
