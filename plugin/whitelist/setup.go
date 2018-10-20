@@ -105,7 +105,7 @@ func (whitelist *whitelist) InitDiscoveryServer(c *caddy.Controller) {
 		if discoveryURL := os.Getenv("TUFIN_GRPC_DISCOVERY_URL"); discoveryURL != "" {
 			discoveryURL, err := url.Parse(discoveryURL)
 			if err == nil {
-				ip := whitelist.getIpByServiceName(discoveryURL.Scheme)
+				ip := whitelist.getIPByServiceName(discoveryURL.Scheme)
 				dc, conn := newDiscoveryClient(fmt.Sprintf("%s:%s", ip, discoveryURL.Opaque))
 				whitelist.Discovery = dc
 				go whitelist.config()
