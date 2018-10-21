@@ -69,7 +69,7 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 
 	segs := dns.SplitDomainName(state.Name())
 	if len(segs) <= 1 {
-		log.Debugf("number of segments: '%d' for state name: '%s'", state.Name())
+		log.Debugf("number of segments: '%d' for state name: '%s'", len(segs), state.Name())
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 

@@ -102,22 +102,25 @@ func setup(c *caddy.Controller) error {
 func (whitelist *whitelist) InitDiscoveryServer(c *caddy.Controller) {
 
 	c.OnStartup(func() error {
-		if discoveryURL := os.Getenv("TUFIN_GRPC_DISCOVERY_URL"); discoveryURL != "" {
-			discoveryURL, err := url.Parse(discoveryURL)
-			if err == nil {
-				ip := whitelist.getIPByServiceName(discoveryURL.Scheme)
-				dc, conn := newDiscoveryClient(fmt.Sprintf("%s:%s", ip, discoveryURL.Opaque))
-				whitelist.Discovery = dc
-				go whitelist.config()
-				c.OnShutdown(func() error {
-					return conn.Close()
-				})
-			} else {
-				log.Warningf("can not parse TUFIN_GRPC_DISCOVERY_URL. error %v", err)
 
+		const env = "TUFIN_GRPC_DISCOVERY_URL"
+		if discoveryURL := GetEnv(env); discoveryURL != "" {
+			discoveryURL, err := url.Parse(discoveryURL)
+			if err != nil {
+				log.Warningf("can not parse discovery URL: '%s' with '%v'", err)
+			} else {
+				ip := whitelist.getIPByServiceName(discoveryURL.Scheme)
+				log.Infof("Discovery URL: '%s', IP: '%s'", discoveryURL, ip)
+				if dc, conn := newDiscoveryClient(fmt.Sprintf("%s:%s", ip, discoveryURL.Opaque)); dc != nil && conn != nil {
+					whitelist.Discovery = dc
+					go whitelist.config()
+					c.OnShutdown(func() error {
+						return conn.Close()
+					})
+				}
 			}
 		} else {
-			return errors.New("TUFIN_GRPC_DISCOVERY_URL must be set")
+			log.Infof("Empty environment variable: '%s'", env)
 		}
 
 		return nil
@@ -148,15 +151,18 @@ func (whitelist *whitelist) config() {
 		for {
 			resp, err := configuration.Recv()
 			if err == io.EOF {
+				log.Errorf("failed to receive stream whitelist discovery configuration with '%v' (io.EOF) retrying...", err)
 				return
 			}
 
 			if err != nil {
+				log.Errorf("failed to receive stream whitelist discovery configuration with '%v' retrying...", err)
 				break
 			}
 
 			var dnsConfiguration dnsConfig
 			if err = json.Unmarshal(resp.GetMsg(), &dnsConfiguration); err != nil {
+				log.Errorf("failed to unmarshal configuration stream message '%v' with '%v' retrying...", resp.GetMsg(), err)
 				continue
 			}
 

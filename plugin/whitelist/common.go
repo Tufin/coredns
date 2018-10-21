@@ -22,3 +22,11 @@ func RetryWithTimeout(timeout time.Duration, sleep time.Duration, f func() bool)
 
 	return nil
 }
+
+func GetEnv(variable string) string {
+
+	ret := GetEnv(variable)
+	log.Infof("'%s': '%s'", variable, ret)
+
+	return ret
+}
