@@ -1,9 +1,10 @@
 package whitelist
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRetryWithTimeout(t *testing.T) {
@@ -24,10 +25,13 @@ func TestRetryWithTimeout(t *testing.T) {
 func TestRetryWithTimeout_Timeout(t *testing.T) {
 
 	i := 0
-	assert.Error(t, RetryWithTimeout(100*time.Microsecond, 10*time.Microsecond, func() bool {
+	err := RetryWithTimeout(100*time.Microsecond, 10*time.Microsecond, func() bool {
 
 		i++
 		return false
-	}))
+	})
+	assert.Error(t, err)
+
+	assert.Equal(t, "timeout", err.Error())
 	assert.True(t, i > 1)
 }

@@ -93,13 +93,8 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 	querySrcService := fmt.Sprintf("%s.%s", sourceService.Name, sourceService.Namespace)
 	queryDstLocation, origin, dstConf := "", "", ""
 
-	if ns, err := whitelist.Kubernetes.GetNamespaceByName(segs[1]); ns != nil {
-		//local kubernetes dstConf
-		queryDstLocation = fmt.Sprintf("%s.listentry.%s", segs[0], segs[1])
-		origin = ""
-		dstConf = fmt.Sprintf("%s.%s", segs[0], segs[1])
-	} else {
-		log.Debugf("failed to get namespace by name with '%v'", err)
+	if ns, err := whitelist.Kubernetes.GetNamespaceByName(segs[1]); err != nil {
+		log.Debugf("failed to get namespace by name with '%v'. assuming egress", err)
 		//make sure that this is real external query without .cluster.local in the end
 		zone := plugin.Zones(whitelist.Zones).Matches(state.Name())
 		if zone != "" {
@@ -109,29 +104,29 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 		origin = "dns"
 		queryDstLocation = state.Name()
 		dstConf = strings.TrimRight(state.Name(), ".")
+	} else {
+		//local kubernetes dstConf
+		log.Debugf("namespace '%s', assuming local kubernetes query", ns)
+		queryDstLocation = fmt.Sprintf("%s.listentry.%s", segs[0], segs[1])
+		origin = ""
+		dstConf = fmt.Sprintf("%s.%s", segs[0], segs[1])
 	}
 
 	serviceName := fmt.Sprintf("%s.svc.%s", querySrcService, whitelist.Zones[0])
 
 	// update kite
 	if whitelist.Configuration.blacklist {
-		if whitelist.Discovery != nil {
-			go whitelist.log(serviceName, queryDstLocation, origin, "allow")
-		}
+		go whitelist.log(serviceName, queryDstLocation, origin, "allow")
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 	if whitelisted, ok := whitelist.Configuration.SourceToDestination[querySrcService]; ok {
 		if _, ok := whitelisted[dstConf]; ok {
-			if whitelist.Discovery != nil {
-				go whitelist.log(serviceName, queryDstLocation, origin, "allow")
-			}
+			go whitelist.log(serviceName, queryDstLocation, origin, "allow")
 			return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 		}
 	}
 
-	if whitelist.Discovery != nil {
-		go whitelist.log(serviceName, queryDstLocation, origin, "deny")
-	}
+	go whitelist.log(serviceName, queryDstLocation, origin, "deny")
 
 	m.SetRcode(r, dns.RcodeNameError)
 	if err := rw.WriteMsg(m); err != nil {
