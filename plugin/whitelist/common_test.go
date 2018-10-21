@@ -33,5 +33,5 @@ func TestRetryWithTimeout_Timeout(t *testing.T) {
 	assert.Error(t, err)
 
 	assert.Equal(t, "timeout", err.Error())
-	assert.True(t, i > 1)
+	assert.True(t, i > 0)
 }
