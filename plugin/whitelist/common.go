@@ -2,6 +2,7 @@ package whitelist
 
 import (
 	"errors"
+	"os"
 	"time"
 )
 
@@ -23,10 +24,10 @@ func RetryWithTimeout(timeout time.Duration, sleep time.Duration, f func() bool)
 	return nil
 }
 
-func GetEnv(variable string) string {
+func GetEnv(key string) string {
 
-	ret := GetEnv(variable)
-	log.Infof("'%s': '%s'", variable, ret)
+	ret := os.Getenv(key)
+	log.Infof("'%s': '%s'", key, ret)
 
 	return ret
 }
