@@ -8,14 +8,13 @@ import (
 	"fmt"
 	"testing"
 
-	"time"
-
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	api "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"time"
 )
 
 type mockHandler struct {
@@ -125,7 +124,7 @@ func TestWhitelist_ServeDNS_NotWhitelisted(t *testing.T) {
 
 	next := newMockHandler()
 	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
-		Discovery:     nil,
+		Discovery:     &mockDiscovery{logged: make(chan bool, 1)},
 		Zones:         []string{"cluster.local"},
 		Configuration: whitelistConfig{blacklist: false}}
 
@@ -147,7 +146,7 @@ func TestWhitelist_ServeDNS_ConfiguredNotWhitelisted(t *testing.T) {
 	config["svc1.testns"] = []string{"www.google.com", "www.amazon.com"}
 
 	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
-		Discovery:     nil,
+		Discovery:     &mockDiscovery{logged: make(chan bool, 1)},
 		Zones:         []string{"cluster.local"},
 		Configuration: whitelistConfig{blacklist: false, SourceToDestination: convert(config)}}
 
@@ -169,7 +168,7 @@ func TestWhitelist_ServeDNS_Whitelisted(t *testing.T) {
 	config["svc1.testns"] = []string{"www.google.com", "www.amazon.com"}
 
 	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
-		Discovery:     nil,
+		Discovery:     &mockDiscovery{logged: make(chan bool, 1)},
 		Zones:         []string{"cluster.local"},
 		Configuration: whitelistConfig{blacklist: true, SourceToDestination: convert(config)}}
 
@@ -191,7 +190,7 @@ func TestWhitelist_ServeDNS_Blacklist_UnknownSvc(t *testing.T) {
 	config["unknown.ns"] = []string{"www.google.com", "www.amazon.com"}
 
 	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
-		Discovery:     nil,
+		Discovery:     &mockDiscovery{logged: make(chan bool, 1)},
 		Zones:         []string{"cluster.local"},
 		Configuration: whitelistConfig{blacklist: true, SourceToDestination: convert(config)}}
 
