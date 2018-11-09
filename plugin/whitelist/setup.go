@@ -5,17 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"math/rand"
+	"net/url"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/kubernetes"
 	"github.com/mholt/caddy"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
-	"io"
-	"net/url"
-	"os"
-	"strings"
-	"time"
 )
 
 type dnsConfig struct {
@@ -145,24 +147,27 @@ func (whitelist *whitelist) config() {
 		configuration, err := whitelist.Discovery.Configure(context.Background(), &ConfigurationRequest{})
 		if err != nil {
 			log.Errorf("failed to stream whitelist discovery configure with '%v' retrying...", err)
+			sleep()
 			continue
 		}
-
 		for {
 			resp, err := configuration.Recv()
 			if err == io.EOF {
 				log.Errorf("failed to receive stream whitelist discovery configuration with '%v' (io.EOF) retrying...", err)
-				return
+				sleep()
+				break
 			}
 
 			if err != nil {
 				log.Errorf("failed to receive stream whitelist discovery configuration with '%v' retrying...", err)
+				sleep()
 				break
 			}
 
 			var dnsConfiguration dnsConfig
 			if err = json.Unmarshal(resp.GetMsg(), &dnsConfiguration); err != nil {
 				log.Errorf("failed to unmarshal configuration stream message '%v' with '%v' retrying...", resp.GetMsg(), err)
+				sleep()
 				continue
 			}
 
@@ -183,4 +188,11 @@ func convert(conf map[string][]string) map[string]map[string]struct{} {
 	}
 
 	return ret
+}
+
+func sleep() {
+
+	d := time.Duration(rand.Int31n(15)+5) * time.Second
+	log.Debugf("Going to sleep '%v'", d)
+	time.Sleep(d)
 }
