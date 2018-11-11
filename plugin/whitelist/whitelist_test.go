@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/miekg/dns"
@@ -14,7 +15,6 @@ import (
 	"google.golang.org/grpc"
 	api "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
 )
 
 type mockHandler struct {
