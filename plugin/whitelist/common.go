@@ -21,8 +21,6 @@ func RetryWithTimeout(timeout time.Duration, sleep time.Duration, f func() bool)
 			time.Sleep(sleep)
 		}
 	}
-
-	return nil
 }
 
 func GetEnv(key string) string {
