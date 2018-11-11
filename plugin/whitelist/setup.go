@@ -20,14 +20,15 @@ import (
 	"google.golang.org/grpc/keepalive"
 )
 
-type dnsConfig struct {
-	Blacklist           bool                `json:"blacklist"`
-	ServicesToWhitelist map[string][]string `json:"services"`
+type dnsPolicyConfig struct {
+	Blacklist bool          `json:"blacklist"`
+	Policy    []*PolicyRule `json:"policy"`
 }
 
 type whitelistConfig struct {
 	blacklist           bool
 	SourceToDestination map[string]map[string]struct{}
+	WildcardRules       []*PolicyRule
 }
 
 func init() {
@@ -164,23 +165,54 @@ func (whitelist *whitelist) config() {
 				break
 			}
 
-			var dnsConfiguration dnsConfig
+			var dnsConfiguration dnsPolicyConfig
 			if err = json.Unmarshal(resp.GetMsg(), &dnsConfiguration); err != nil {
 				log.Errorf("failed to unmarshal configuration stream message '%v' with '%v' retrying...", resp.GetMsg(), err)
 				sleep()
 				continue
 			}
 
-			whitelist.Configuration = whitelistConfig{blacklist: dnsConfiguration.Blacklist, SourceToDestination: convert(dnsConfiguration.ServicesToWhitelist)}
+			whitelist.Configuration = whitelistConfig{
+				blacklist:           dnsConfiguration.Blacklist,
+				SourceToDestination: toStrictPolicy(dnsConfiguration.Policy),
+				WildcardRules:       getWildcardRules(dnsConfiguration.Policy),
+			}
 			log.Infof("DNS Configuration: '%+v'", whitelist.Configuration)
 		}
 	}
 }
 
-func convert(conf map[string][]string) map[string]map[string]struct{} {
+func getWildcardRules(rules []*PolicyRule) []*PolicyRule {
+
+	ret := []*PolicyRule{}
+	for _, currRule := range rules {
+		if isWildcardRule(currRule) {
+			ret = append(ret, currRule)
+		}
+	}
+
+	return ret
+}
+
+func toStrictPolicy(policy []*PolicyRule) map[string]map[string]struct{} {
+
+	serviceToWhitelist := make(map[string][]string)
+	for _, currRule := range policy {
+		if !isWildcardRule(currRule) {
+			serviceFullName := ServiceFormat(currRule.Source.Name, currRule.Source.Namespace)
+			dstRule := ""
+			switch currRule.Destination.Type {
+			case ResourceType_DNS:
+				dstRule = currRule.Destination.Name
+			default:
+				dstRule = ServiceFormat(currRule.Destination.Name, currRule.Destination.Namespace)
+			}
+			serviceToWhitelist[serviceFullName] = append(serviceToWhitelist[serviceFullName], dstRule)
+		}
+	}
 
 	ret := make(map[string]map[string]struct{})
-	for k, v := range conf {
+	for k, v := range serviceToWhitelist {
 		ret[k] = make(map[string]struct{})
 		for _, item := range v {
 			ret[k][item] = struct{}{}
@@ -195,4 +227,11 @@ func sleep() {
 	d := time.Duration(rand.Int31n(15)+5) * time.Second
 	log.Debugf("Going to sleep '%v'", d)
 	time.Sleep(d)
+}
+
+func isWildcardRule(currRule *PolicyRule) bool {
+
+	return strings.HasPrefix(currRule.Source.Name, "*") ||
+		strings.HasPrefix(currRule.Destination.Name, "*") ||
+		currRule.Source.Type == ResourceType_KubernetesNamespace
 }

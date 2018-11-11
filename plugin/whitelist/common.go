@@ -2,6 +2,7 @@ package whitelist
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"time"
 )
@@ -30,4 +31,9 @@ func GetEnv(key string) string {
 	log.Infof("'%s': '%s'", key, ret)
 
 	return ret
+}
+
+func ServiceFormat(name string, ns string) string {
+
+	return fmt.Sprintf("%s.%s", name, ns)
 }
