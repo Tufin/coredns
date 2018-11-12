@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"strings"
-
 	"time"
 
 	"github.com/coredns/coredns/plugin"
