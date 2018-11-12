@@ -37,6 +37,11 @@ type whitelist struct {
 	plugin.Zones
 }
 
+func (whitelist whitelist) Name() string {
+
+	return "whitelist"
+}
+
 func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, r *dns.Msg) (int, error) {
 
 	m := new(dns.Msg)
@@ -213,10 +218,6 @@ func (whitelist whitelist) getIPByServiceName(serviceName string) string {
 	}
 
 	return ""
-}
-
-func (whitelist whitelist) Name() string {
-	return "whitelist"
 }
 
 func (whitelist whitelist) log(service string, query, origin, action string) {
