@@ -252,6 +252,8 @@ func (whitelist whitelist) isAllowWildcard(srcName string, srcNamespace string, 
 		} else if isContainsDstService(rules, dst) {
 			ret = true
 		}
+	} else {
+		log.Debugf("No source rule fits namespace: '%s'", srcNamespace)
 	}
 
 	return ret

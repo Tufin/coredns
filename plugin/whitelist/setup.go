@@ -31,6 +31,18 @@ type whitelistConfig struct {
 	WildcardRules       []*PolicyRule
 }
 
+func (wc whitelistConfig) String() string {
+
+	var sb strings.Builder
+	for _, currRule := range wc.WildcardRules {
+		sb.WriteString(fmt.Sprintf("%+v", *currRule))
+	}
+	return fmt.Sprintf("OrcaConfig{Blacklist: %v, SourceToDestinations: %+v, Wildcard: %v}",
+		wc.blacklist,
+		wc.SourceToDestination,
+		sb.String())
+}
+
 func init() {
 
 	caddy.RegisterPlugin("whitelist", caddy.Plugin{
@@ -172,33 +184,24 @@ func (whitelist *whitelist) config() {
 				continue
 			}
 
+			srcToDst, wildcardRules := getPolicy(dnsConfiguration.Policy)
 			whitelist.Configuration = whitelistConfig{
 				blacklist:           dnsConfiguration.Blacklist,
-				SourceToDestination: toStrictPolicy(dnsConfiguration.Policy),
-				WildcardRules:       getWildcardRules(dnsConfiguration.Policy),
+				SourceToDestination: srcToDst,
+				WildcardRules:       wildcardRules,
 			}
 			log.Infof("DNS Configuration: '%+v'", whitelist.Configuration)
 		}
 	}
 }
 
-func getWildcardRules(rules []*PolicyRule) []*PolicyRule {
-
-	ret := []*PolicyRule{}
-	for _, currRule := range rules {
-		if isWildcardRule(currRule) {
-			ret = append(ret, currRule)
-		}
-	}
-
-	return ret
-}
-
-func toStrictPolicy(policy []*PolicyRule) map[string]map[string]struct{} {
+func getPolicy(policy []*PolicyRule) (srcToDst map[string]map[string]struct{}, wildcardRules []*PolicyRule) {
 
 	serviceToWhitelist := make(map[string][]string)
 	for _, currRule := range policy {
-		if !isWildcardRule(currRule) {
+		if isWildcardRule(currRule) {
+			wildcardRules = append(wildcardRules, currRule)
+		} else {
 			serviceFullName := ServiceFormat(currRule.Source.Name, currRule.Source.Namespace)
 			dstRule := ""
 			switch currRule.Destination.Type {
@@ -211,15 +214,15 @@ func toStrictPolicy(policy []*PolicyRule) map[string]map[string]struct{} {
 		}
 	}
 
-	ret := make(map[string]map[string]struct{})
+	srcToDst = make(map[string]map[string]struct{})
 	for k, v := range serviceToWhitelist {
-		ret[k] = make(map[string]struct{})
+		srcToDst[k] = make(map[string]struct{})
 		for _, item := range v {
-			ret[k][item] = struct{}{}
+			srcToDst[k][item] = struct{}{}
 		}
 	}
 
-	return ret
+	return srcToDst, wildcardRules
 }
 
 func sleep() {
@@ -229,9 +232,9 @@ func sleep() {
 	time.Sleep(d)
 }
 
-func isWildcardRule(currRule *PolicyRule) bool {
+func isWildcardRule(rule *PolicyRule) bool {
 
-	return strings.HasPrefix(currRule.Source.Name, "*") ||
-		strings.HasPrefix(currRule.Destination.Name, "*") ||
-		currRule.Source.Type == ResourceType_KubernetesNamespace
+	return strings.HasPrefix(rule.Source.Name, "*") ||
+		strings.HasPrefix(rule.Destination.Name, "*") ||
+		rule.Source.Type == ResourceType_KubernetesNamespace
 }

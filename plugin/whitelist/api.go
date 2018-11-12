@@ -1,5 +1,7 @@
 package whitelist
 
+import "fmt"
+
 type ResourceType int32
 
 const (
@@ -25,4 +27,10 @@ type PolicyRule struct {
 	Destination *Resource  `json:"destination,omitempty"`
 	Action      ActionType `json:"action,omitempty"`
 	Reason      string     `json:"reason,omitempty"`
+}
+
+func (pr PolicyRule) String() string {
+
+	return fmt.Sprintf("PolicyRule{Source: %+v, Destination: %+v, Action: %v, Reason: %v}",
+		*pr.Source, *pr.Destination, pr.Action, pr.Reason)
 }
