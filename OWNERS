@@ -1,6 +1,7 @@
-reviewers:
+approvers:
   - bradbeam
   - chrisohaver
+  - dilyevsky
   - fastest963
   - fturib
   - greenpau
@@ -15,19 +16,19 @@ reviewers:
   - varyoo
   - yongtang
 
-approvers:
-  - chrisohaver
-  - johnbelamaric
-  - miekg
-  - yongtang
-
 features:
   - comments
   - reviewers
   - aliases
   - branches
+  - exec
 
 aliases:
   - |
     /plugin: (.*) -> /label add: plugin/$1
-
+  - |
+    /approve -> /lgtm
+  - |
+    /wai -> /label add: works as intended
+  - |
+    /release: (.*) -> /exec: /opt/bin/release-coredns $1

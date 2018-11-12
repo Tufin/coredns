@@ -32,7 +32,7 @@ type (
 
 		// In the future this should be something like ZoneMeta that contains all this stuff.
 		transferTo []string
-		noReload   bool
+		ReloadInterval time.Duration
 		upstream   upstream.Upstream // Upstream for looking up names during the resolution process.
 
 		duration time.Duration
@@ -84,8 +84,6 @@ func (a Auto) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (i
 		return dns.RcodeServerFailure, nil
 	}
 
-	state.SizeAndDo(m)
-	m, _ = state.Scrub(m)
 	w.WriteMsg(m)
 	return dns.RcodeSuccess, nil
 }

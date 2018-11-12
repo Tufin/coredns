@@ -3,7 +3,6 @@ package test
 import (
 	"bufio"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -48,8 +47,6 @@ func TestReadme(t *testing.T) {
 
 	create(contents)
 	defer remove(contents)
-
-	log.SetOutput(ioutil.Discard)
 
 	middle := filepath.Join("..", "plugin")
 	dirs, err := ioutil.ReadDir(middle)
@@ -112,7 +109,7 @@ func corefileFromReadme(readme string) ([]*Input, error) {
 		}
 
 		if corefile {
-			temp += line + "\n" // readd newline stripped by s.Text()
+			temp += line + "\n" // read newline stripped by s.Text()
 		}
 	}
 

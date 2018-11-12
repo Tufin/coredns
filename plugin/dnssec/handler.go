@@ -2,7 +2,6 @@ package dnssec
 
 import (
 	"context"
-	"sync"
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/metrics"
@@ -41,8 +40,12 @@ func (d Dnssec) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) 
 		}
 	}
 
-	drr := &ResponseWriter{w, d, server}
-	return plugin.NextOrFailure(d.Name(), d.Next, ctx, drr, r)
+	if do {
+		drr := &ResponseWriter{w, d, server}
+		return plugin.NextOrFailure(d.Name(), d.Next, ctx, drr, r)
+	}
+
+	return plugin.NextOrFailure(d.Name(), d.Next, ctx, w, r)
 }
 
 var (
@@ -77,5 +80,3 @@ var (
 
 // Name implements the Handler interface.
 func (d Dnssec) Name() string { return "dnssec" }
-
-var once sync.Once

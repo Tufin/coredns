@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/request"
 
 	"github.com/miekg/dns"
 )
@@ -38,9 +39,17 @@ type Rewrite struct {
 // ServeDNS implements the plugin.Handler interface.
 func (rw Rewrite) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	wr := NewResponseReverter(w, r)
+	state := request.Request{W: w, Req: r}
+
 	for _, rule := range rw.Rules {
-		switch result := rule.Rewrite(ctx, w, r); result {
+		switch result := rule.Rewrite(ctx, state); result {
 		case RewriteDone:
+			if !validName(state.Req.Question[0].Name) {
+				x := state.Req.Question[0].Name
+				log.Errorf("Invalid name after rewrite: %s", x)
+				state.Req.Question[0] = wr.originalQuestion
+				return dns.RcodeServerFailure, fmt.Errorf("invalid name after rewrite: %s", x)
+			}
 			respRule := rule.GetResponseRule()
 			if respRule.Active == true {
 				wr.ResponseRewrite = true
@@ -68,7 +77,7 @@ func (rw Rewrite) Name() string { return "rewrite" }
 // Rule describes a rewrite rule.
 type Rule interface {
 	// Rewrite rewrites the current request.
-	Rewrite(context.Context, dns.ResponseWriter, *dns.Msg) Result
+	Rewrite(ctx context.Context, state request.Request) Result
 	// Mode returns the processing mode stop or continue.
 	Mode() string
 	// GetResponseRule returns the rule to rewrite response with, if any.
@@ -101,23 +110,25 @@ func newRule(args ...string) (Rule, error) {
 		startArg = 1
 	}
 
-	if ruleType == "answer" {
-		return nil, fmt.Errorf("response rewrites must begin with a name rule")
-	}
-
-	if ruleType != "edns0" && ruleType != "name" && expectNumArgs != 3 {
-		return nil, fmt.Errorf("%s rules must have exactly two arguments", ruleType)
-	}
-
 	switch ruleType {
+	case "answer":
+		return nil, fmt.Errorf("response rewrites must begin with a name rule")
 	case "name":
 		return newNameRule(mode, args[startArg:]...)
 	case "class":
+		if expectNumArgs != 3 {
+			return nil, fmt.Errorf("%s rules must have exactly two arguments", ruleType)
+		}
 		return newClassRule(mode, args[startArg:]...)
 	case "type":
+		if expectNumArgs != 3 {
+			return nil, fmt.Errorf("%s rules must have exactly two arguments", ruleType)
+		}
 		return newTypeRule(mode, args[startArg:]...)
 	case "edns0":
 		return newEdns0Rule(mode, args[startArg:]...)
+	case "ttl":
+		return newTtlRule(mode, args[startArg:]...)
 	default:
 		return nil, fmt.Errorf("invalid rule type %q", args[0])
 	}

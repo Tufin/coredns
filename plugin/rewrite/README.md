@@ -13,7 +13,7 @@ Rewrites are invisible to the client. There are simple rewrites (fast) and compl
 
 A simplified/easy to digest syntax for *rewrite* is...
 ~~~
-rewrite [continue|stop] FIELD FROM TO
+rewrite [continue|stop] FIELD [FROM TO|FROM TTL]
 ~~~
 
 * **FIELD** indicates what part of the request/response is being re-written.
@@ -21,12 +21,15 @@ rewrite [continue|stop] FIELD FROM TO
    * `type` - the type field of the request will be rewritten. FROM/TO must be a DNS record type (`A`, `MX`, etc);
 e.g., to rewrite ANY queries to HINFO, use `rewrite type ANY HINFO`.
    * `class` - the class of the message will be rewritten. FROM/TO must be a DNS class type (`IN`, `CH`, or `HS`) e.g., to rewrite CH queries to IN use `rewrite class CH IN`.
-   * `name` - the query name in the _request_ is rewritten; by default this is a full match of the name, e.g., `rewrite name miek.nl example.org`. Other match types are supported, see the **Name Field Rewrites** section below.
+   * `name` - the query name in the _request_ is rewritten; by default this is a full match of the
+     name, e.g., `rewrite name example.net example.org`. Other match types are supported, see the **Name Field Rewrites** section below.
    * `answer name` - the query name in the _response_ is rewritten.  This option has special restrictions and requirements, in particular it must always combined with a `name` rewrite.  See below in the **Response Rewrites** section.
    *  `edns0` - an EDNS0 option can be appended to the request as described below in the **EDNS0 Options** section.
+   * `ttl` - the TTL value in the _response_ is rewritten.
 
-* **FROM** is the name or type to match
+* **FROM** is the name (exact, suffix, prefix, substring, or regex) or type to match
 * **TO** is the destination name or type to rewrite to
+* **TTL** is the number of seconds to set the TTL value to
 
 If you specify multiple rules and an incoming query matches on multiple rules, the rewrite
 will behave as following
@@ -38,7 +41,8 @@ for not specifying this rule processing mode is `stop`
 
 The `rewrite` plugin offers the ability to match on the name in the question section of
 a DNS request. The match could be exact, substring, or based on a prefix, suffix, or regular
-expression.
+expression. If the newly used name is not a legal domain name the plugin returns an error to the
+client.
 
 The syntax for the name re-writing is as follows:
 
@@ -80,6 +84,12 @@ Thus:
 
 * Incoming Request Name: `ftp-us-west-1.example.org`
 * Re-written Request Name: `ftp.service.us-west-1.consul`
+
+The following example rewrites the `schmoogle.com` suffix to `google.com`.
+
+~~~
+rewrite name suffix .schmoogle.com. .google.com.
+~~~
 
 ### Response Rewrites
 
@@ -175,6 +185,42 @@ follows:
 rewrite [continue|stop] name regex STRING STRING answer name STRING STRING
 ```
 
+When using `exact` name rewrite rules, answer gets re-written automatically,
+and there is no need defining `answer name` instruction. The below rule
+rewrites the name in a request from `RED` to `BLUE`, and subsequently
+rewrites the name in a corresponding response from `BLUE` to `RED`. The
+client in the request would see only `RED` and no `BLUE`.
+
+```
+rewrite [continue|stop] name exact RED BLUE
+```
+
+### TTL Field Rewrites
+
+At times, the need for rewriting TTL value could arise. For example, a DNS server
+may prevent caching by setting TTL as low as zero (`0`). An administrator
+may want to increase the TTL to prevent caching, e.g. to 15 seconds.
+
+In the below example, the TTL in the answers for `coredns.rocks` domain are
+being set to `15`:
+
+```
+    rewrite continue {
+        ttl regex (.*)\.coredns\.rocks 15
+    }
+```
+
+By the same token, an administrator may use this feature to force caching by
+setting TTL value really low.
+
+
+The syntax for the TTL rewrite rule is as follows. The meaning of
+`exact|prefix|suffix|substring|regex` is the same as with the name rewrite rules.
+
+```
+rewrite [continue|stop] ttl [exact|prefix|suffix|substring|regex] STRING SECONDS
+```
+
 ## EDNS0 Options
 
 Using FIELD edns0, you can set, append, or replace specific EDNS0 options on the request.
@@ -206,17 +252,25 @@ rewrites the first local option with code 0xffee, setting the data to "abcd". Eq
 }
 ~~~
 
-* A variable data is specified with a pair of curly brackets `{}`. Following are the supported variables by default:
+* A variable data is specified with a pair of curly brackets `{}`. Following are the supported variables:
   {qname}, {qtype}, {client_ip}, {client_port}, {protocol}, {server_ip}, {server_port}.
-Any plugin that can provide it's own additional variables by implementing metadata.Provider interface. If you are going to use metadata variables then metadata plugin must be enabled.
 
-Example:
+* If the metadata plugin is enabled, then labels are supported as variables if they are presented within curly brackets.
+the variable data will be filled with the value associated with that label. If that label is not provided,
+the variable will be silently substitute by an empty string.
 
-~~~ corefile
-. {
-    metadata
-    rewrite edns0 local set 0xffee {client_ip}
-}
+Examples:
+
+~~~
+rewrite edns0 local set 0xffee {client_ip}
+~~~
+
+The following example uses metadata and an imaginary "some-plugin" that would provide "some-label" as metadata information.
+
+~~~
+metadata
+some-plugin
+rewrite edns0 local set 0xffee {some-plugin/some-label}
 ~~~
 
 ### EDNS0_NSID

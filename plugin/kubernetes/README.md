@@ -34,14 +34,17 @@ kubernetes [ZONES...] {
     resyncperiod DURATION
     endpoint URL [URL...]
     tls CERT KEY CACERT
+    kubeconfig KUBECONFIG CONTEXT
     namespaces NAMESPACE...
     labels EXPRESSION
     pods POD-MODE
     endpoint_pod_names
     upstream [ADDRESS...]
     ttl TTL
+    noendpoints
     transfer to ADDRESS...
     fallthrough [ZONES...]
+    ignore empty_service
 }
 ```
 
@@ -53,6 +56,7 @@ kubernetes [ZONES...] {
    will automatically perform a healthcheck and proxy to the healthy k8s API endpoint.
 * `tls` **CERT** **KEY** **CACERT** are the TLS cert, key and the CA cert file names for remote k8s connection.
    This option is ignored if connecting in-cluster (i.e. endpoint is not specified).
+* `kubeconfig` **KUBECONFIG** **CONTEXT** authenticates the connection to a remote k8s cluster using a kubeconfig file. It supports TLS, username and password, or token-based authentication. This option is ignored if connecting in-cluster (i.e. endpoint is not specified).
 * `namespaces` **NAMESPACE [NAMESPACE...]**, only exposes the k8s namespaces listed.
    If this option is omitted all namespaces are exposed
 * `labels` **EXPRESSION** only exposes the records for Kubernetes objects that match this label selector.
@@ -67,7 +71,7 @@ kubernetes [ZONES...] {
 
    * `disabled`: Default. Do not process pod requests, always returning `NXDOMAIN`
    * `insecure`: Always return an A record with IP from request (without checking k8s).  This option
-     is is vulnerable to abuse if used maliciously in conjunction with wildcard SSL certs.  This
+     is vulnerable to abuse if used maliciously in conjunction with wildcard SSL certs.  This
      option is provided for backward compatibility with kube-dns.
    * `verified`: Return an A record if there exists a pod in same namespace with matching IP.  This
      option requires substantially more memory than in insecure mode, since it will maintain a watch
@@ -92,17 +96,18 @@ kubernetes [ZONES...] {
 * `noendpoints` will turn off the serving of endpoint records by disabling the watch on endpoints.
   All endpoint queries and headless service queries will result in an NXDOMAIN.
 * `transfer` enables zone transfers. It may be specified multiples times. `To` signals the direction
-  (only `to` is alllow). **ADDRESS** must be denoted in CIDR notation (127.0.0.1/32 etc.) or just as
+  (only `to` is allow). **ADDRESS** must be denoted in CIDR notation (127.0.0.1/32 etc.) or just as
   plain addresses. The special wildcard `*` means: the entire internet.
   Sending DNS notifies is not supported.
+  [Deprecated](https://github.com/kubernetes/dns/blob/master/docs/specification.md#26---deprecated-records) pod records in the sub domain `pod.cluster.local` are not transferred.
 * `fallthrough` **[ZONES...]** If a query for a record in the zones for which the plugin is authoritative
   results in NXDOMAIN, normally that is what the response will be. However, if you specify this option,
   the query will instead be passed on down the plugin chain, which can include another plugin to handle
   the query. If **[ZONES...]** is omitted, then fallthrough happens for all zones for which the plugin
   is authoritative. If specific zones are listed (for example `in-addr.arpa` and `ip6.arpa`), then only
   queries for those zones will be subject to fallthrough.
-* `ignore empty_service` return NXDOMAIN for services without any ready endpoint addresses (e.g. ready pods). 
-  This allows the querying pod to continue searching for the service in the search path. 
+* `ignore empty_service` return NXDOMAIN for services without any ready endpoint addresses (e.g. ready pods).
+  This allows the querying pod to continue searching for the service in the search path.
   The search path could, for example, include another kubernetes cluster.
 
 ## Health
