@@ -37,6 +37,7 @@ func (wc whitelistConfig) String() string {
 	for _, currRule := range wc.WildcardRules {
 		sb.WriteString(fmt.Sprintf("%+v", *currRule))
 	}
+
 	return fmt.Sprintf("OrcaConfig{Blacklist: %v, SourceToDestinations: %+v, Wildcard: %v}",
 		wc.blacklist,
 		wc.SourceToDestination,
@@ -190,7 +191,7 @@ func (whitelist *whitelist) config() {
 				SourceToDestination: srcToDst,
 				WildcardRules:       wildcardRules,
 			}
-			log.Infof("DNS Configuration: '%+v'", whitelist.Configuration)
+			log.Infof("'%+v'", whitelist.Configuration)
 		}
 	}
 }
@@ -234,7 +235,6 @@ func sleep() {
 
 func isWildcardRule(rule *PolicyRule) bool {
 
-	return strings.HasPrefix(rule.Source.Name, "*") ||
-		strings.HasPrefix(rule.Destination.Name, "*") ||
-		rule.Source.Type == ResourceType_KubernetesNamespace
+	return rule.Source.Type == ResourceType_KubernetesNamespace ||
+		(rule.Source.Type == ResourceType_DNS && strings.HasPrefix(rule.Destination.Name, "*"))
 }
