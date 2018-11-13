@@ -235,6 +235,8 @@ func sleep() {
 
 func isWildcardRule(rule *PolicyRule) bool {
 
+	log.Infof("src type: %v, dst type: %v, dst name: %v", rule.Source.Type, rule.Destination.Type, rule.Destination.Name)
+
 	return rule.Source.Type == ResourceType_KubernetesNamespace ||
 		(rule.Destination.Type == ResourceType_DNS && strings.HasPrefix(rule.Destination.Name, "*"))
 }
