@@ -17,11 +17,11 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const src, srcNamespace = "svc1", "testns"
+const svc, svcNamespace, googleQuestion, googleCom, cnnQuestion = "svc1", "testns", "www.google.com.", "www.google.com", "www.cnn.com."
 
 var srcToDst, _ = getPolicy([]*PolicyRule{
-	{Source: &Resource{Name: src, Namespace: srcNamespace}, Destination: &Resource{Name: "www.google.com", Type: ResourceType_DNS}},
-	{Source: &Resource{Name: src, Namespace: srcNamespace}, Destination: &Resource{Name: "www.amazon.com", Type: ResourceType_DNS}},
+	{Source: &Resource{Name: svc, Namespace: svcNamespace}, Destination: &Resource{Name: googleCom, Type: ResourceType_DNS}},
+	{Source: &Resource{Name: svc, Namespace: svcNamespace}, Destination: &Resource{Name: "www.amazon.com", Type: ResourceType_DNS}},
 })
 
 type mockHandler struct {
@@ -67,8 +67,8 @@ func (mk mockKubeAPI) ServiceList() []*api.Service {
 	return []*api.Service{
 		{
 			ObjectMeta: meta.ObjectMeta{
-				Name:      "svc1",
-				Namespace: "testns",
+				Name:      svc,
+				Namespace: svcNamespace,
 			},
 			Spec: api.ServiceSpec{
 				ClusterIP: "10.0.0.1",
@@ -83,7 +83,7 @@ func (mk mockKubeAPI) ServiceList() []*api.Service {
 		{
 			ObjectMeta: meta.ObjectMeta{
 				Name:      "hdls1",
-				Namespace: "testns",
+				Namespace: svcNamespace,
 			},
 			Spec: api.ServiceSpec{
 				ClusterIP: api.ClusterIPNone,
@@ -93,7 +93,7 @@ func (mk mockKubeAPI) ServiceList() []*api.Service {
 		{
 			ObjectMeta: meta.ObjectMeta{
 				Name:      "external",
-				Namespace: "testns",
+				Namespace: svcNamespace,
 			},
 			Spec: api.ServiceSpec{
 				ExternalName: "coredns.io",
@@ -110,7 +110,7 @@ func (mk mockKubeAPI) ServiceList() []*api.Service {
 
 func (mk mockKubeAPI) GetNamespaceByName(name string) (*api.Namespace, error) {
 
-	if name == "testns" {
+	if name == svcNamespace {
 		return &api.Namespace{
 			ObjectMeta: meta.ObjectMeta{
 				Name: name,
@@ -145,7 +145,7 @@ func TestWhitelist_ServeDNS_NotWhitelisted(t *testing.T) {
 	rw := &test.ResponseWriter{}
 	req := new(dns.Msg)
 
-	req.SetQuestion("www.google.com.", dns.TypeA)
+	req.SetQuestion(googleQuestion, dns.TypeA)
 
 	whitelistPlugin.ServeDNS(context.Background(), rw, req)
 
@@ -183,7 +183,7 @@ func TestWhitelist_ServeDNS_Whitelisted(t *testing.T) {
 	rw := &test.ResponseWriter{}
 	req := new(dns.Msg)
 
-	req.SetQuestion("www.google.com.", dns.TypeA)
+	req.SetQuestion(googleQuestion, dns.TypeA)
 
 	whitelistPlugin.ServeDNS(context.Background(), rw, req)
 
@@ -196,7 +196,7 @@ func TestWhitelist_ServeDNS_Blacklist_UnknownSvc(t *testing.T) {
 
 	const srcUnknown, srcNamespaceUnknown = "unknown", "ns"
 	srcToDstUnknown, wildcardRules := getPolicy([]*PolicyRule{
-		{Source: &Resource{Name: srcUnknown, Namespace: srcNamespaceUnknown}, Destination: &Resource{Name: "www.google.com", Type: ResourceType_DNS}},
+		{Source: &Resource{Name: srcUnknown, Namespace: srcNamespaceUnknown}, Destination: &Resource{Name: googleCom, Type: ResourceType_DNS}},
 		{Source: &Resource{Name: srcUnknown, Namespace: srcNamespaceUnknown}, Destination: &Resource{Name: "www.amazon.com", Type: ResourceType_DNS}},
 	})
 	assert.Empty(t, wildcardRules)
@@ -208,7 +208,7 @@ func TestWhitelist_ServeDNS_Blacklist_UnknownSvc(t *testing.T) {
 	rw := &test.ResponseWriter{}
 	req := new(dns.Msg)
 
-	req.SetQuestion("www.google.com.", dns.TypeA)
+	req.SetQuestion(googleQuestion, dns.TypeA)
 
 	whitelistPlugin.ServeDNS(context.Background(), rw, req)
 
@@ -229,7 +229,7 @@ func TestWhitelist_Log(t *testing.T) {
 	rw := &test.ResponseWriter{}
 	req := new(dns.Msg)
 
-	req.SetQuestion("www.google.com.", dns.TypeA)
+	req.SetQuestion(googleQuestion, dns.TypeA)
 
 	whitelistPlugin.ServeDNS(context.Background(), rw, req)
 	assert.True(t, next.Served)
@@ -257,77 +257,74 @@ func TestWhitelist_Log(t *testing.T) {
 	assert.NoError(t, json.NewDecoder(bytes.NewReader(msg)).Decode(&sentMsg))
 
 	assert.Equal(t, fmt.Sprintf("svc1.testns.svc.%s", clusterZone), sentMsg.Source)
-	assert.Equal(t, "www.google.com", sentMsg.Destination)
+	assert.Equal(t, googleCom, sentMsg.Destination)
 	assert.Equal(t, "allow", sentMsg.Action)
 	assert.Equal(t, "dns", sentMsg.Origin)
 }
 
 func TestWhitelist_ServeDNS_WhitelistNamespaceWildcardToEgress(t *testing.T) {
 
-	next := newMockHandler()
-
-	policy := []*PolicyRule{
+	assert.True(t, testServeDNS([]*PolicyRule{
 		{
 			Source:      &Resource{Namespace: "*", Type: ResourceType_KubernetesNamespace},
-			Destination: &Resource{Name: "www.google.com", Type: ResourceType_DNS},
+			Destination: &Resource{Name: googleCom, Type: ResourceType_DNS},
 		},
-	}
-	srcToDst, wildcardRules := getPolicy(policy)
-	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
-		Discovery: &mockDiscovery{logged: make(chan bool, 1)},
-		Zones:     []string{"cluster.local"},
-		Configuration: whitelistConfig{blacklist: false,
-			SourceToDestination: srcToDst,
-			WildcardRules:       wildcardRules}}
+	}, googleQuestion))
+}
 
-	rw := &test.ResponseWriter{}
-	req := new(dns.Msg)
+func TestWhitelist_ServeDNS_WhitelistNamespaceWildcardToEgress_NotMatch(t *testing.T) {
 
-	req.SetQuestion("www.google.com.", dns.TypeA)
-
-	whitelistPlugin.ServeDNS(context.Background(), rw, req)
-
-	assert.True(t, next.Served)
+	assert.False(t, testServeDNS([]*PolicyRule{
+		{
+			Source:      &Resource{Namespace: "*", Type: ResourceType_KubernetesNamespace},
+			Destination: &Resource{Name: googleCom, Type: ResourceType_DNS},
+		},
+	}, cnnQuestion))
 }
 
 func TestWhitelist_ServeDNS_WhitelistNamespaceToEgress(t *testing.T) {
 
-	next := newMockHandler()
-
-	policy := []*PolicyRule{
+	assert.True(t, testServeDNS([]*PolicyRule{
 		{
-			Source:      &Resource{Namespace: "testns", Type: ResourceType_KubernetesNamespace},
-			Destination: &Resource{Name: "www.google.com", Type: ResourceType_DNS},
+			Source:      &Resource{Namespace: svcNamespace, Type: ResourceType_KubernetesNamespace},
+			Destination: &Resource{Name: googleCom, Type: ResourceType_DNS},
 		},
-	}
-	srcToDst, wildcardRules := getPolicy(policy)
-	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
-		Discovery: &mockDiscovery{logged: make(chan bool, 1)},
-		Zones:     []string{"cluster.local"},
-		Configuration: whitelistConfig{blacklist: false,
-			SourceToDestination: srcToDst,
-			WildcardRules:       wildcardRules}}
+	}, googleQuestion))
+}
 
-	rw := &test.ResponseWriter{}
-	req := new(dns.Msg)
+func TestWhitelist_ServeDNS_WhitelistNamespaceToEgress_NotMatch(t *testing.T) {
 
-	req.SetQuestion("www.google.com.", dns.TypeA)
-
-	whitelistPlugin.ServeDNS(context.Background(), rw, req)
-
-	assert.True(t, next.Served)
+	assert.False(t, testServeDNS([]*PolicyRule{
+		{
+			Source:      &Resource{Namespace: svcNamespace, Type: ResourceType_KubernetesNamespace},
+			Destination: &Resource{Name: googleCom, Type: ResourceType_DNS},
+		},
+	}, cnnQuestion))
 }
 
 func TestWhitelist_ServeDNS_WhitelistNamespaceToWildcardEgress(t *testing.T) {
 
-	next := newMockHandler()
-
-	policy := []*PolicyRule{
+	assert.True(t, testServeDNS([]*PolicyRule{
 		{
-			Source:      &Resource{Namespace: "testns", Type: ResourceType_KubernetesNamespace},
+			Source:      &Resource{Namespace: svcNamespace, Type: ResourceType_KubernetesNamespace},
 			Destination: &Resource{Name: "*.google.com", Type: ResourceType_DNS},
 		},
-	}
+	}, googleQuestion))
+}
+
+func TestWhitelist_ServeDNS_WhitelistNamespaceToWildcardEgress_NotMatch(t *testing.T) {
+
+	assert.False(t, testServeDNS([]*PolicyRule{
+		{
+			Source:      &Resource{Namespace: svcNamespace, Type: ResourceType_KubernetesNamespace},
+			Destination: &Resource{Name: "*.google.com", Type: ResourceType_DNS},
+		},
+	}, cnnQuestion))
+}
+
+func testServeDNS(policy []*PolicyRule, question string) bool {
+
+	next := newMockHandler()
 	srcToDst, wildcardRules := getPolicy(policy)
 	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
 		Discovery: &mockDiscovery{logged: make(chan bool, 1)},
@@ -335,14 +332,11 @@ func TestWhitelist_ServeDNS_WhitelistNamespaceToWildcardEgress(t *testing.T) {
 		Configuration: whitelistConfig{blacklist: false,
 			SourceToDestination: srcToDst,
 			WildcardRules:       wildcardRules}}
-
 	log.Infof("%+v", whitelistPlugin.Configuration)
 	rw := &test.ResponseWriter{}
 	req := new(dns.Msg)
-
-	req.SetQuestion("www.google.com.", dns.TypeA)
-
+	req.SetQuestion(question, dns.TypeA)
 	whitelistPlugin.ServeDNS(context.Background(), rw, req)
 
-	assert.True(t, next.Served)
+	return next.Served
 }
