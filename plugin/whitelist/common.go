@@ -2,6 +2,7 @@ package whitelist
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"time"
 )
@@ -20,8 +21,6 @@ func RetryWithTimeout(timeout time.Duration, sleep time.Duration, f func() bool)
 			time.Sleep(sleep)
 		}
 	}
-
-	return nil
 }
 
 func GetEnv(key string) string {
@@ -30,4 +29,9 @@ func GetEnv(key string) string {
 	log.Infof("'%s': '%s'", key, ret)
 
 	return ret
+}
+
+func ServiceFormat(name string, ns string) string {
+
+	return fmt.Sprintf("%s.%s", name, ns)
 }

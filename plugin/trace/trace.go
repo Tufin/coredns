@@ -1,4 +1,4 @@
-// Package trace implements OpenTracing-based tracing
+//// Package trace implements OpenTracing-based tracing
 package trace
 
 import (

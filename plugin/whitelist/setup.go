@@ -5,27 +5,43 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"math/rand"
+	"net/url"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/kubernetes"
 	"github.com/mholt/caddy"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
-	"io"
-	"net/url"
-	"os"
-	"strings"
-	"time"
 )
 
-type dnsConfig struct {
-	Blacklist           bool                `json:"blacklist"`
-	ServicesToWhitelist map[string][]string `json:"services"`
+type dnsPolicyConfig struct {
+	Blacklist bool          `json:"blacklist"`
+	Policy    []*PolicyRule `json:"policy"`
 }
 
 type whitelistConfig struct {
 	blacklist           bool
 	SourceToDestination map[string]map[string]struct{}
+	WildcardRules       []*PolicyRule
+}
+
+func (wc whitelistConfig) String() string {
+
+	var sb strings.Builder
+	for _, currRule := range wc.WildcardRules {
+		sb.WriteString(fmt.Sprintf("%+v", *currRule))
+	}
+
+	return fmt.Sprintf("OrcaConfig{Blacklist: %v, SourceToDestinations: %+v, Wildcard: %v}",
+		wc.blacklist,
+		wc.SourceToDestination,
+		sb.String())
 }
 
 func init() {
@@ -145,42 +161,82 @@ func (whitelist *whitelist) config() {
 		configuration, err := whitelist.Discovery.Configure(context.Background(), &ConfigurationRequest{})
 		if err != nil {
 			log.Errorf("failed to stream whitelist discovery configure with '%v' retrying...", err)
+			sleep()
 			continue
 		}
-
 		for {
 			resp, err := configuration.Recv()
 			if err == io.EOF {
 				log.Errorf("failed to receive stream whitelist discovery configuration with '%v' (io.EOF) retrying...", err)
-				return
+				sleep()
+				break
 			}
 
 			if err != nil {
 				log.Errorf("failed to receive stream whitelist discovery configuration with '%v' retrying...", err)
+				sleep()
 				break
 			}
 
-			var dnsConfiguration dnsConfig
+			var dnsConfiguration dnsPolicyConfig
 			if err = json.Unmarshal(resp.GetMsg(), &dnsConfiguration); err != nil {
 				log.Errorf("failed to unmarshal configuration stream message '%v' with '%v' retrying...", resp.GetMsg(), err)
+				sleep()
 				continue
 			}
 
-			whitelist.Configuration = whitelistConfig{blacklist: dnsConfiguration.Blacklist, SourceToDestination: convert(dnsConfiguration.ServicesToWhitelist)}
-			log.Infof("DNS Configuration: '%+v'", whitelist.Configuration)
+			srcToDst, wildcardRules := getPolicy(dnsConfiguration.Policy)
+			whitelist.Configuration = whitelistConfig{
+				blacklist:           dnsConfiguration.Blacklist,
+				SourceToDestination: srcToDst,
+				WildcardRules:       wildcardRules,
+			}
+			log.Infof("'%+v'", whitelist.Configuration)
 		}
 	}
 }
 
-func convert(conf map[string][]string) map[string]map[string]struct{} {
+func getPolicy(policy []*PolicyRule) (srcToDst map[string]map[string]struct{}, wildcardRules []*PolicyRule) {
 
-	ret := make(map[string]map[string]struct{})
-	for k, v := range conf {
-		ret[k] = make(map[string]struct{})
-		for _, item := range v {
-			ret[k][item] = struct{}{}
+	serviceToWhitelist := make(map[string][]string)
+	for _, currRule := range policy {
+		if isWildcardRule(currRule) {
+			wildcardRules = append(wildcardRules, currRule)
+		} else {
+			serviceFullName := ServiceFormat(currRule.Source.Name, currRule.Source.Namespace)
+			dstRule := ""
+			switch currRule.Destination.Type {
+			case ResourceType_DNS:
+				dstRule = currRule.Destination.Name
+			default:
+				dstRule = ServiceFormat(currRule.Destination.Name, currRule.Destination.Namespace)
+			}
+			serviceToWhitelist[serviceFullName] = append(serviceToWhitelist[serviceFullName], dstRule)
 		}
 	}
 
-	return ret
+	srcToDst = make(map[string]map[string]struct{})
+	for k, v := range serviceToWhitelist {
+		srcToDst[k] = make(map[string]struct{})
+		for _, item := range v {
+			srcToDst[k][item] = struct{}{}
+		}
+	}
+
+	return srcToDst, wildcardRules
+}
+
+func sleep() {
+
+	d := time.Duration(rand.Int31n(15)+5) * time.Second
+	log.Debugf("Going to sleep '%v'", d)
+	time.Sleep(d)
+}
+
+func isWildcardRule(rule *PolicyRule) bool {
+
+	log.Infof("src type: %v, dst type: %v, dst name: %v", rule.Source.Type, rule.Destination.Type, rule.Destination.Name)
+
+	return rule.Source.Type == ResourceType_KubernetesNamespace ||
+		(rule.Destination.Type == ResourceType_DNS && strings.HasPrefix(rule.Destination.Name, "*"))
 }

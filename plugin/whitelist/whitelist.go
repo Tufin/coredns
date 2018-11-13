@@ -118,7 +118,7 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 		log.Debugf("namespace '%s', assuming local kubernetes query", ns)
 		queryDstLocation = fmt.Sprintf("%s.listentry.%s", segs[0], segs[1])
 		origin = ""
-		dstConf = fmt.Sprintf("%s.%s", segs[0], segs[1])
+		dstConf = ServiceFormat(segs[0], segs[1])
 	}
 
 	serviceName := fmt.Sprintf("%s.svc.%s", querySrcService, whitelist.Zones[0])
@@ -133,6 +133,9 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 			go whitelist.log(serviceName, queryDstLocation, origin, "allow")
 			return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 		}
+	} else if whitelist.isAllowWildcard(sourceService.Name, sourceService.Namespace, dstConf, origin) {
+		go whitelist.log(serviceName, queryDstLocation, origin, "allow")
+		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 
 	go whitelist.log(serviceName, queryDstLocation, origin, "deny")
@@ -236,4 +239,68 @@ func (whitelist whitelist) log(service string, query, origin, action string) {
 	if _, err := whitelist.Discovery.Discover(context.Background(), &Discovery{Msg: actionBytes.Bytes()}); err != nil {
 		log.Errorf("log not sent to discovery: '%v'", err)
 	}
+}
+
+func (whitelist whitelist) isAllowWildcard(srcName string, srcNamespace string, dst string, dstOrigin string) bool {
+
+	ret := false
+	rules := getRulesByNamespace(whitelist.Configuration.WildcardRules, srcNamespace)
+	if len(rules) > 0 {
+		if dstOrigin == "dns" {
+			if isContainsEgressRule(rules, dst) {
+				ret = true
+			}
+		} else if isContainsDstService(rules, dst) {
+			ret = true
+		}
+	} else {
+		log.Debugf("No source rule fits namespace: '%s'", srcNamespace)
+	}
+
+	return ret
+}
+
+func isContainsDstService(rules []*PolicyRule, dst string) bool {
+
+	ret := false
+	for _, currRule := range rules {
+		if ServiceFormat(currRule.Destination.Name, currRule.Destination.Namespace) == dst {
+			ret = true
+			break
+		}
+	}
+
+	return ret
+}
+
+func isContainsEgressRule(rules []*PolicyRule, egress string) bool {
+
+	ret := false
+	for _, currRule := range rules {
+		dst := currRule.Destination.Name
+		if strings.HasPrefix(dst, "*.") {
+			if strings.HasSuffix(egress, dst[1:]) {
+				ret = true
+				break
+			}
+		} else if dst == egress {
+			ret = true
+			break
+		}
+	}
+
+	return ret
+}
+
+func getRulesByNamespace(rules []*PolicyRule, ns string) []*PolicyRule {
+
+	ret := []*PolicyRule{}
+	for _, currRule := range rules {
+		if currRule.Source.Type == ResourceType_KubernetesNamespace &&
+			(currRule.Source.Namespace == "*" || currRule.Source.Namespace == ns) {
+			ret = append(ret, currRule)
+		}
+	}
+
+	return ret
 }
