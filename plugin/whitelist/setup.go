@@ -52,6 +52,51 @@ func init() {
 	})
 }
 
+func setup(c *caddy.Controller) error {
+
+	whitelist := &whitelist{
+		Configuration: whitelistConfig{blacklist: true},
+	}
+
+	k8s, err := kubernetesParse(c)
+	if err != nil {
+		log.Errorf("failed to parse kubernetes with '%v'", err)
+		return plugin.Error("whitelist", err)
+	}
+
+	if len(k8s.Zones) != 1 {
+		msg := fmt.Sprintf("whitelist zones length should be 1 (cluster zone only), but was '%d'", len(k8s.Zones))
+		log.Error(msg)
+		return errors.New(msg)
+	}
+
+	err = k8s.InitKubeCache()
+	if err != nil {
+		msg := fmt.Sprintf("failed to init kubernetes cache with '%v'", err)
+		log.Error(msg)
+		return errors.New(msg)
+	}
+
+	k8s.RegisterKubeCache(c)
+	whitelist.Kubernetes = k8s.APIConn
+	whitelist.Zones = k8s.Zones
+	whitelist.InitDiscoveryServer(c)
+
+	if sources := os.Getenv("TUFIN_FALLTHROUGH_SOURCES"); sources != "" {
+		whitelist.FallthroughSources = strings.Split(sources, ",")
+	}
+	if domains := os.Getenv("TUFIN_FALLTHROUGH_DOMAINS"); domains != "" {
+		whitelist.FallthroughDomains = strings.Split(domains, ",")
+	}
+
+	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
+		whitelist.Next = next
+		return whitelist
+	})
+
+	return nil
+}
+
 func kubernetesParse(c *caddy.Controller) (*kubernetes.Kubernetes, error) {
 
 	var (
@@ -73,46 +118,6 @@ func kubernetesParse(c *caddy.Controller) (*kubernetes.Kubernetes, error) {
 	}
 
 	return k8s, nil
-}
-
-func setup(c *caddy.Controller) error {
-
-	whitelist := &whitelist{
-		Configuration: whitelistConfig{blacklist: true},
-	}
-
-	k8s, err := kubernetesParse(c)
-	if err != nil {
-		return plugin.Error("whitelist", err)
-	}
-
-	if len(k8s.Zones) != 1 {
-		return errors.New("whitelist zones length should be 1 (cluster zone only)")
-	}
-
-	err = k8s.InitKubeCache()
-	if err != nil {
-		return err
-	}
-
-	k8s.RegisterKubeCache(c)
-	whitelist.Kubernetes = k8s.APIConn
-	whitelist.Zones = k8s.Zones
-	whitelist.InitDiscoveryServer(c)
-
-	if sources := os.Getenv("TUFIN_FALLTHROUGH_SOURCES"); sources != "" {
-		whitelist.FallthroughSources = strings.Split(sources, ",")
-	}
-	if domains := os.Getenv("TUFIN_FALLTHROUGH_DOMAINS"); domains != "" {
-		whitelist.FallthroughDomains = strings.Split(domains, ",")
-	}
-
-	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
-		whitelist.Next = next
-		return whitelist
-	})
-
-	return nil
 }
 
 func (whitelist *whitelist) InitDiscoveryServer(c *caddy.Controller) {
