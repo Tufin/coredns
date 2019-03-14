@@ -7,6 +7,7 @@ FROM scratch
 
 COPY --from=0 /etc/ssl/certs /etc/ssl/certs
 ADD coredns /coredns
+ADD licenses /THIRD_PARTY_NOTICES/
 
 EXPOSE 54 53/udp
 ENTRYPOINT ["/coredns"]
