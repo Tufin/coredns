@@ -43,3 +43,9 @@ jobs:
           name: Upload the docker image to gcr
           command: |
             /scripts/upload_to_gcr.sh $PROJECT_NAME $GCR_NAME $CIRCLE_BUILD_NUM $CIRCLE_BRANCH
+      - run:
+          name: Upload the docker image to dockerhub
+          command: |
+            echo ${DOCKER_PASS} | docker login -u ${DOCKER_USER} --password-stdin
+            docker tag "${PROJECT_NAME}" tufin/"${PROJECT_NAME}":staging
+            docker push tufin/"${PROJECT_NAME}":staging
