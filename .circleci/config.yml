@@ -10,7 +10,7 @@ jobs:
 
     environment:
       PROJECT_NAME: coredns
-      GCR_NAME: eu.gcr.io/tufinlight/coredns
+      GCR_NAME: eu.gcr.io/dream-198012/coredns
       TEST_RESULTS: /tmp/test-results
       TUFIN_DOMAIN: tufin
       TUFIN_PROJECT: stage
@@ -52,5 +52,5 @@ jobs:
           name: Upload the docker image to dockerhub
           command: |
             echo ${DOCKER_PASS} | docker login -u ${DOCKER_USER} --password-stdin
-            docker tag "${PROJECT_NAME}" tufin/"${PROJECT_NAME}":staging
-            docker push tufin/"${PROJECT_NAME}":staging
+            docker tag "${PROJECT_NAME}" tufinim/"${PROJECT_NAME}":master
+            docker push tufinim/"${PROJECT_NAME}":master
