@@ -128,7 +128,7 @@ func (whitelist *whitelist) InitDiscoveryServer(c *caddy.Controller) {
 		if discoveryURL := GetEnv(env); discoveryURL != "" {
 			discoveryURL, err := url.Parse(discoveryURL)
 			if err != nil {
-				log.Warningf("can not parse discovery URL: '%s' with '%v'", err)
+				log.Warningf("can not parse discovery URL: '%s' with '%v'", discoveryURL, err)
 			} else {
 				ip := whitelist.getIPByServiceName(discoveryURL.Scheme)
 				log.Infof("Discovery URL: '%s', IP: '%s'", discoveryURL, ip)
