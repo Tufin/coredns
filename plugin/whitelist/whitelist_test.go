@@ -1,13 +1,9 @@
 package whitelist
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"testing"
-	"time"
 
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/miekg/dns"
@@ -213,53 +209,6 @@ func TestWhitelist_ServeDNS_Blacklist_UnknownSvc(t *testing.T) {
 	whitelistPlugin.ServeDNS(context.Background(), rw, req)
 
 	assert.True(t, next.Served)
-}
-
-func TestWhitelist_Log(t *testing.T) {
-
-	clusterZone := "cluster.local"
-	next := newMockHandler()
-
-	mockDiscovery := &mockDiscovery{logged: make(chan bool)}
-	whitelistPlugin := whitelist{Kubernetes: &mockKubeAPI{}, Next: next,
-		Discovery:     mockDiscovery,
-		Zones:         []string{clusterZone},
-		Configuration: whitelistConfig{blacklist: true, SourceToDestination: srcToDst}}
-
-	rw := &test.ResponseWriter{}
-	req := new(dns.Msg)
-
-	req.SetQuestion(googleQuestion, dns.TypeA)
-
-	whitelistPlugin.ServeDNS(context.Background(), rw, req)
-	assert.True(t, next.Served)
-
-	select {
-
-	case <-time.After(10 * time.Second):
-		assert.Fail(t, "didn't log after timeout timeout")
-	case <-mockDiscovery.logged:
-
-	}
-
-	assert.Len(t, mockDiscovery.discovered, 1)
-
-	msg := mockDiscovery.discovered[0]
-
-	type discoverMsg struct {
-		Source      string `json:"src"`
-		Destination string `json:"dst"`
-		Action      string `json:"action"`
-		Origin      string `json:"origin"`
-	}
-
-	sentMsg := discoverMsg{}
-	assert.NoError(t, json.NewDecoder(bytes.NewReader(msg)).Decode(&sentMsg))
-
-	assert.Equal(t, fmt.Sprintf("svc1.testns.svc.%s", clusterZone), sentMsg.Source)
-	assert.Equal(t, googleCom, sentMsg.Destination)
-	assert.Equal(t, "allow", sentMsg.Action)
-	assert.Equal(t, "dns", sentMsg.Origin)
 }
 
 func TestWhitelist_ServeDNS_WhitelistNamespaceWildcardToEgress(t *testing.T) {
