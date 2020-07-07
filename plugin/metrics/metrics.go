@@ -4,7 +4,6 @@ package metrics
 import (
 	"net"
 	"net/http"
-	"os"
 	"sync"
 
 	"github.com/coredns/coredns/plugin"
@@ -37,7 +36,7 @@ func New(addr string) *Metrics {
 	}
 	// Add the default collectors
 	met.MustRegister(prometheus.NewGoCollector())
-	met.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
+	//met.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 
 	// Add all of our collectors
 	met.MustRegister(buildInfo)

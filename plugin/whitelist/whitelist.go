@@ -125,16 +125,16 @@ func (whitelist whitelist) ServeDNS(ctx context.Context, rw dns.ResponseWriter, 
 
 	// update kite
 	if whitelist.Configuration.blacklist {
-		go whitelist.log(serviceName, queryDstLocation, origin, "allow")
+		//go whitelist.log(serviceName, queryDstLocation, origin, "allow")
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 	if whitelisted, ok := whitelist.Configuration.SourceToDestination[querySrcService]; ok {
 		if _, ok := whitelisted[dstConf]; ok {
-			go whitelist.log(serviceName, queryDstLocation, origin, "allow")
+			//go whitelist.log(serviceName, queryDstLocation, origin, "allow")
 			return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 		}
 	} else if whitelist.isAllowWildcard(sourceService.Name, sourceService.Namespace, dstConf, origin) {
-		go whitelist.log(serviceName, queryDstLocation, origin, "allow")
+		//go whitelist.log(serviceName, queryDstLocation, origin, "allow")
 		return plugin.NextOrFailure(whitelist.Name(), whitelist.Next, ctx, rw, r)
 	}
 
