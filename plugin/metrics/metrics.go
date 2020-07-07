@@ -36,7 +36,7 @@ func New(addr string) *Metrics {
 	}
 	// Add the default collectors
 	met.MustRegister(prometheus.NewGoCollector())
-	met.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	//met.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 
 	// Add all of our collectors
 	met.MustRegister(buildInfo)
